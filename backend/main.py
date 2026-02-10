@@ -336,12 +336,13 @@ def chart_cross_dataset(req: CrossDatasetRequest):
     conn = get_conn()
     gcol = quote_col(req.group_by)
     
+    # Use LOWER() for case-insensitive matching since get_overlapping_antibodies returns lowercase
     ctgov_sql = f'''
         SELECT {gcol} as category,
                SUM(CAST(events_ab AS REAL)) as total_events,
                MAX(CAST(n_ab AS REAL)) as total_n
         FROM ctgov_all
-        WHERE {quote_col("antibody")} = ? AND {gcol} IS NOT NULL 
+        WHERE LOWER({quote_col("antibody")}) = LOWER(?) AND {gcol} IS NOT NULL 
               AND events_ab IS NOT NULL AND n_ab IS NOT NULL AND n_ab > 0
         GROUP BY {gcol}
     '''
@@ -353,7 +354,7 @@ def chart_cross_dataset(req: CrossDatasetRequest):
         SELECT {gcol} as category,
                AVG(CAST({pct_col} AS REAL)) as avg_pct
         FROM label_final
-        WHERE {quote_col("antibody")} = ? AND {gcol} IS NOT NULL AND {pct_col} IS NOT NULL
+        WHERE LOWER({quote_col("antibody")}) = LOWER(?) AND {gcol} IS NOT NULL AND {pct_col} IS NOT NULL
         GROUP BY {gcol}
     '''
     label_rows = conn.execute(label_sql, [req.antibody]).fetchall()
