@@ -1,0 +1,9 @@
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+.env
+*.log
+frontend/dist/
+backend/static/
+backend/mab_database.sqlite
