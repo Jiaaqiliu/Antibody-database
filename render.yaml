@@ -2,12 +2,8 @@ services:
   - type: web
     name: antibody-database
     runtime: python
-    buildCommand: |
-      pip install -r backend/requirements.txt
-      cd backend && python ingest.py
-      cd ../frontend && npm install && npm run build
-      cp -r dist ../backend/static
-    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+    buildCommand: "pip install -r backend/requirements.txt && cd backend && python ingest.py && cd ../frontend && npm install && npm run build && cp -r dist ../backend/static"
+    startCommand: "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
