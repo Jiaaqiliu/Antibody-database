@@ -74,6 +74,7 @@ export default function AdverseEventChart() {
               orientation: 'h',
               y: [...localData.categories].reverse(),
               x: [...localData.proportions].reverse(),
+              customdata: [...localData.counts].reverse(),
               marker: {
                 color: [...localData.proportions].reverse().map((_, i, arr) => {
                   const ratio = i / Math.max(arr.length - 1, 1);
@@ -81,7 +82,7 @@ export default function AdverseEventChart() {
                 }),
                 line: { width: 0 },
               },
-              hovertemplate: '<b>%{y}</b><br>Proportion: %{x:.1f}%<extra></extra>',
+              hovertemplate: '<b>%{y}</b><br>Proportion: %{x:.2f}%<br>Events: %{customdata}<extra></extra>',
               hoverlabel: { bgcolor: '#1e293b', font: { family: 'Inter, sans-serif', color: '#fff', size: 12 }, bordercolor: 'transparent' },
             }]}
             layout={{

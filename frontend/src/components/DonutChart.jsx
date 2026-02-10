@@ -27,7 +27,7 @@ export default function DonutChart({ title, data }) {
       line: { color: '#ffffff', width: 2 },
     },
     textinfo: hasData ? 'percent' : 'none',
-    hoverinfo: hasData ? 'label+value+percent' : 'none',
+    hovertemplate: hasData ? '<b>%{label}</b><br>Count: %{value:,}<br>Share: %{percent}<extra></extra>' : '',
     textfont: { size: 10, color: '#475569', family: 'Inter, sans-serif' },
     hoverlabel: { bgcolor: '#1e293b', font: { family: 'Inter, sans-serif', color: '#fff', size: 12 }, bordercolor: 'transparent' },
     pull: 0.02,

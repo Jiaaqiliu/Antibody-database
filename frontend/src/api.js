@@ -75,3 +75,34 @@ export function getExportUrl(table, filters, search) {
   if (search) params.set('search', search);
   return `${BASE}/export?${params}`;
 }
+
+export function fetchCrossDataset({ antibody, groupBy, topN }) {
+  return request('/chart/cross-dataset', {
+    method: 'POST',
+    body: JSON.stringify({
+      antibody,
+      group_by: groupBy || 'organ_system',
+      top_n: topN || 15,
+    }),
+  });
+}
+
+export function fetchTargetAggregation({ table, target, groupBy, topN }) {
+  return request('/chart/target-aggregation', {
+    method: 'POST',
+    body: JSON.stringify({
+      table,
+      target,
+      group_by: groupBy || 'organ_system',
+      top_n: topN || 15,
+    }),
+  });
+}
+
+export function fetchOverlappingAntibodies() {
+  return request('/overlapping-antibodies');
+}
+
+export function fetchTargets(table) {
+  return request(`/targets?table=${table}`);
+}

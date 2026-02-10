@@ -6,6 +6,8 @@ import FilterBar from './components/FilterBar';
 import DistributionDashboard from './components/DistributionDashboard';
 import AdverseEventChart from './components/AdverseEventChart';
 import ComparativeChart from './components/ComparativeChart';
+import CrossDatasetChart from './components/CrossDatasetChart';
+import TargetAggregationChart from './components/TargetAggregationChart';
 import DataTable from './components/DataTable';
 
 export default function App() {
@@ -21,6 +23,10 @@ export default function App() {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-7">
             <AdverseEventChart />
             <ComparativeChart />
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-7">
+            <CrossDatasetChart />
+            <TargetAggregationChart />
           </div>
           <DataTable />
         </main>

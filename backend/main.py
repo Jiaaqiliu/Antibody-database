@@ -2,6 +2,7 @@ import sqlite3
 import csv
 import io
 import os
+import math
 from typing import Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -93,6 +94,45 @@ class ComparativeRequest(BaseModel):
     nct_id: Optional[str] = None
     group_by: str = "organ_system"
     top_n: int = 15
+
+
+class CrossDatasetRequest(BaseModel):
+    antibody: str
+    group_by: str = "organ_system"
+    top_n: int = 15
+
+
+class TargetAggregationRequest(BaseModel):
+    table: str = "ctgov_all"
+    target: str
+    group_by: str = "organ_system"
+    top_n: int = 15
+
+
+def calc_relative_risk(ab_events, ab_n, comp_events, comp_n):
+    """Calculate Relative Risk and 95% CI"""
+    if not ab_n or not comp_n or ab_n == 0 or comp_n == 0:
+        return None, None, None
+    
+    ab_rate = ab_events / ab_n
+    comp_rate = comp_events / comp_n
+    
+    if comp_rate == 0:
+        return None, None, None
+    
+    rr = ab_rate / comp_rate
+    
+    if ab_events <= 0 or comp_events <= 0:
+        return round(rr, 3), None, None
+    
+    try:
+        ln_rr = math.log(rr)
+        se = math.sqrt(1/ab_events - 1/ab_n + 1/comp_events - 1/comp_n)
+        ci_lower = math.exp(ln_rr - 1.96 * se)
+        ci_upper = math.exp(ln_rr + 1.96 * se)
+        return round(rr, 3), round(ci_lower, 3), round(ci_upper, 3)
+    except (ValueError, ZeroDivisionError):
+        return round(rr, 3), None, None
 
 
 @app.get("/api/tables")
@@ -266,11 +306,167 @@ def chart_comparative(req: ComparativeRequest):
         ab_proportions = [round(r["ab_pct"], 2) if r["ab_pct"] else 0 for r in rows]
         comp_proportions = [round(r["comp_pct"], 2) if r["comp_pct"] else 0 for r in rows]
 
+    rr_values = []
+    rr_ci_lower = []
+    rr_ci_upper = []
+    
+    if tt == "ctgov":
+        for r in rows:
+            rr, ci_l, ci_u = calc_relative_risk(
+                r["ab_events"], r["ab_n"], r["comp_events"], r["comp_n"]
+            )
+            rr_values.append(rr)
+            rr_ci_lower.append(ci_l)
+            rr_ci_upper.append(ci_u)
+    else:
+        rr_values = [None] * len(categories)
+        rr_ci_lower = [None] * len(categories)
+        rr_ci_upper = [None] * len(categories)
+
     conn.close()
     return {
         "ab_arm": {"categories": categories, "proportions": ab_proportions},
         "comp_arm": {"categories": categories, "proportions": comp_proportions},
+        "relative_risk": {"values": rr_values, "ci_lower": rr_ci_lower, "ci_upper": rr_ci_upper},
     }
+
+
+@app.post("/api/chart/cross-dataset")
+def chart_cross_dataset(req: CrossDatasetRequest):
+    conn = get_conn()
+    gcol = quote_col(req.group_by)
+    
+    ctgov_sql = f'''
+        SELECT {gcol} as category,
+               SUM(CAST(events_ab AS REAL)) as total_events,
+               MAX(CAST(n_ab AS REAL)) as total_n
+        FROM ctgov_all
+        WHERE {quote_col("antibody")} = ? AND {gcol} IS NOT NULL 
+              AND events_ab IS NOT NULL AND n_ab IS NOT NULL AND n_ab > 0
+        GROUP BY {gcol}
+    '''
+    ctgov_rows = conn.execute(ctgov_sql, [req.antibody]).fetchall()
+    ctgov_data = {r["category"]: round(r["total_events"] / r["total_n"] * 100, 2) if r["total_n"] else 0 for r in ctgov_rows}
+    
+    pct_col = quote_col("all_grades%")
+    label_sql = f'''
+        SELECT {gcol} as category,
+               AVG(CAST({pct_col} AS REAL)) as avg_pct
+        FROM label_final
+        WHERE {quote_col("antibody")} = ? AND {gcol} IS NOT NULL AND {pct_col} IS NOT NULL
+        GROUP BY {gcol}
+    '''
+    label_rows = conn.execute(label_sql, [req.antibody]).fetchall()
+    label_data = {r["category"]: round(r["avg_pct"], 2) if r["avg_pct"] else 0 for r in label_rows}
+    
+    all_categories = sorted(set(ctgov_data.keys()) | set(label_data.keys()))
+    
+    if req.top_n and len(all_categories) > req.top_n:
+        category_max = [(c, max(ctgov_data.get(c, 0), label_data.get(c, 0))) for c in all_categories]
+        category_max.sort(key=lambda x: x[1], reverse=True)
+        all_categories = [c[0] for c in category_max[:req.top_n]]
+    
+    conn.close()
+    return {
+        "categories": all_categories,
+        "ctgov": {"values": [ctgov_data.get(c, None) for c in all_categories]},
+        "label": {"values": [label_data.get(c, None) for c in all_categories]},
+        "antibody": req.antibody,
+    }
+
+
+@app.post("/api/chart/target-aggregation")
+def chart_target_aggregation(req: TargetAggregationRequest):
+    validate_table(req.table)
+    conn = get_conn()
+    tt = table_type(req.table)
+    gcol = quote_col(req.group_by)
+    
+    if tt == "ctgov":
+        sql = f'''
+            SELECT {gcol} as category,
+                   antibody,
+                   SUM(CAST(events_ab AS REAL)) as total_events,
+                   MAX(CAST(n_ab AS REAL)) as total_n
+            FROM {req.table}
+            WHERE {quote_col("target_1")} = ? AND {gcol} IS NOT NULL 
+                  AND events_ab IS NOT NULL AND n_ab IS NOT NULL AND n_ab > 0
+            GROUP BY {gcol}, antibody
+        '''
+        rows = conn.execute(sql, [req.target]).fetchall()
+        
+        category_stats = {}
+        for r in rows:
+            cat = r["category"]
+            pct = round(r["total_events"] / r["total_n"] * 100, 2) if r["total_n"] else 0
+            if cat not in category_stats:
+                category_stats[cat] = []
+            category_stats[cat].append(pct)
+    else:
+        pct_col = quote_col("all_grades%")
+        sql = f'''
+            SELECT {gcol} as category,
+                   antibody,
+                   AVG(CAST({pct_col} AS REAL)) as avg_pct
+            FROM {req.table}
+            WHERE {quote_col("target_1")} = ? AND {gcol} IS NOT NULL AND {pct_col} IS NOT NULL
+            GROUP BY {gcol}, antibody
+        '''
+        rows = conn.execute(sql, [req.target]).fetchall()
+        
+        category_stats = {}
+        for r in rows:
+            cat = r["category"]
+            pct = round(r["avg_pct"], 2) if r["avg_pct"] else 0
+            if cat not in category_stats:
+                category_stats[cat] = []
+            category_stats[cat].append(pct)
+    
+    result = []
+    for cat, values in category_stats.items():
+        if values:
+            result.append({
+                "category": cat,
+                "mean": round(sum(values) / len(values), 2),
+                "min": round(min(values), 2),
+                "max": round(max(values), 2),
+                "count": len(values),
+            })
+    
+    result.sort(key=lambda x: x["mean"], reverse=True)
+    if req.top_n:
+        result = result[:req.top_n]
+    
+    conn.close()
+    return {
+        "target": req.target,
+        "data": result,
+    }
+
+
+@app.get("/api/overlapping-antibodies")
+def get_overlapping_antibodies():
+    conn = get_conn()
+    ctgov_abs = set(r[0].lower().strip() for r in conn.execute(
+        "SELECT DISTINCT antibody FROM ctgov_all WHERE antibody IS NOT NULL AND antibody != ''"
+    ).fetchall())
+    label_abs = set(r[0].lower().strip() for r in conn.execute(
+        "SELECT DISTINCT antibody FROM label_final WHERE antibody IS NOT NULL AND antibody != ''"
+    ).fetchall())
+    overlap = sorted(ctgov_abs & label_abs)
+    conn.close()
+    return {"antibodies": overlap, "count": len(overlap)}
+
+
+@app.get("/api/targets")
+def get_targets(table: str = "ctgov_all"):
+    validate_table(table)
+    conn = get_conn()
+    rows = conn.execute(
+        f'SELECT DISTINCT {quote_col("target_1")} FROM {table} WHERE {quote_col("target_1")} IS NOT NULL ORDER BY {quote_col("target_1")}'
+    ).fetchall()
+    conn.close()
+    return {"targets": [r[0] for r in rows]}
 
 
 @app.get("/api/studies")

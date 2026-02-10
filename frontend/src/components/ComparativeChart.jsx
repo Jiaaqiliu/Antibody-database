@@ -108,33 +108,79 @@ export default function ComparativeChart() {
             </div>
           </div>
         ) : (
-          <Plot
-            data={[
-              {
-                type: 'bar', name: 'Treatment Arm', y: data.ab_arm.categories, x: data.ab_arm.proportions, orientation: 'h',
-                marker: { color: 'rgba(99, 102, 241, 0.8)', line: { width: 0 } },
-                hoverlabel: { bgcolor: '#4338ca', font: { family: 'Inter', color: '#fff' }, bordercolor: 'transparent' },
-              },
-              {
-                type: 'bar', name: 'Comparator', y: data.comp_arm.categories, x: data.comp_arm.proportions, orientation: 'h',
-                marker: { color: 'rgba(245, 158, 11, 0.8)', line: { width: 0 } },
-                hoverlabel: { bgcolor: '#d97706', font: { family: 'Inter', color: '#fff' }, bordercolor: 'transparent' },
-              },
-            ]}
-            layout={{
-              barmode: 'group',
-              margin: { t: 8, b: 40, l: 280, r: 24 },
-              xaxis: { title: { text: 'Proportion (%)', font: { size: 11, color: '#94a3b8', family: 'Inter' } }, tickfont: { size: 11, color: '#94a3b8', family: 'Inter' }, gridcolor: '#f1f5f9', zeroline: false },
-              yaxis: { tickfont: { size: 11, color: '#475569', family: 'Inter' }, automargin: true },
-              legend: { orientation: 'h', y: 1.08, font: { size: 12, family: 'Inter', color: '#64748b' } },
-              paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
-              font: { family: 'Inter, sans-serif' },
-              height: 450, bargap: 0.25, bargroupgap: 0.1,
-            }}
-            config={{ displayModeBar: false, responsive: true }}
-            style={{ width: '100%' }}
-            useResizeHandler
-          />
+          <div>
+            <Plot
+              data={[
+                {
+                  type: 'bar', name: 'Treatment Arm', y: data.ab_arm.categories, x: data.ab_arm.proportions, orientation: 'h',
+                  marker: { color: 'rgba(99, 102, 241, 0.8)', line: { width: 0 } },
+                  hovertemplate: '%{y}<br>Treatment: %{x:.2f}%<extra></extra>',
+                  hoverlabel: { bgcolor: '#4338ca', font: { family: 'Inter', color: '#fff' }, bordercolor: 'transparent' },
+                },
+                {
+                  type: 'bar', name: 'Comparator', y: data.comp_arm.categories, x: data.comp_arm.proportions, orientation: 'h',
+                  marker: { color: 'rgba(245, 158, 11, 0.8)', line: { width: 0 } },
+                  hovertemplate: '%{y}<br>Comparator: %{x:.2f}%<extra></extra>',
+                  hoverlabel: { bgcolor: '#d97706', font: { family: 'Inter', color: '#fff' }, bordercolor: 'transparent' },
+                },
+              ]}
+              layout={{
+                barmode: 'group',
+                margin: { t: 8, b: 40, l: 280, r: 24 },
+                xaxis: { title: { text: 'Proportion (%)', font: { size: 11, color: '#94a3b8', family: 'Inter' } }, tickfont: { size: 11, color: '#94a3b8', family: 'Inter' }, gridcolor: '#f1f5f9', zeroline: false },
+                yaxis: { tickfont: { size: 11, color: '#475569', family: 'Inter' }, automargin: true },
+                legend: { orientation: 'h', y: 1.08, font: { size: 12, family: 'Inter', color: '#64748b' } },
+                paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+                font: { family: 'Inter, sans-serif' },
+                height: 400, bargap: 0.25, bargroupgap: 0.1,
+              }}
+              config={{ displayModeBar: false, responsive: true }}
+              style={{ width: '100%' }}
+              useResizeHandler
+            />
+            {data.relative_risk && data.relative_risk.values.some(v => v !== null) && (
+              <div className="mt-4 border-t border-slate-100 pt-4">
+                <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Relative Risk (95% CI)</h4>
+                <div className="max-h-48 overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-slate-50">
+                      <tr>
+                        <th className="text-left py-1.5 px-2 font-semibold text-slate-600">Category</th>
+                        <th className="text-right py-1.5 px-2 font-semibold text-slate-600">RR</th>
+                        <th className="text-right py-1.5 px-2 font-semibold text-slate-600">95% CI</th>
+                        <th className="text-center py-1.5 px-2 font-semibold text-slate-600">Significance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.ab_arm.categories.map((cat, i) => {
+                        const rr = data.relative_risk.values[i];
+                        const ciL = data.relative_risk.ci_lower[i];
+                        const ciU = data.relative_risk.ci_upper[i];
+                        const isSignificant = ciL && ciU && (ciL > 1 || ciU < 1);
+                        if (rr === null) return null;
+                        return (
+                          <tr key={cat} className="border-t border-slate-100 hover:bg-slate-50">
+                            <td className="py-1.5 px-2 text-slate-700">{cat}</td>
+                            <td className={`py-1.5 px-2 text-right font-medium ${rr > 1 ? 'text-rose-600' : rr < 1 ? 'text-emerald-600' : 'text-slate-600'}`}>{rr}</td>
+                            <td className="py-1.5 px-2 text-right text-slate-500">{ciL && ciU ? `${ciL} - ${ciU}` : '-'}</td>
+                            <td className="py-1.5 px-2 text-center">
+                              {isSignificant ? (
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${rr > 1 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                  {rr > 1 ? '↑ Risk' : '↓ Risk'}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400">-</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
