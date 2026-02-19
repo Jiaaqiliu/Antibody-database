@@ -1,7 +1,14 @@
 import { useFilter } from '../context/FilterContext';
 import { getExportUrl } from '../api';
 
-const PRIORITY_COLS = ['antibody', 'condition', 'organ_system', 'adverse_event_term', 'general_molecular_category', 'target_1', 'record_category', 'source'];
+const PRIORITY_COLS = [
+  'antibody', 'condition', 'organ_system', 'adverse_event_term', 
+  'general_molecular_category', 'target_1', 'moa_new', 'record_category',
+  'dose_mg', 'dose_mg_kg', 'frequency_days', 'median_duration_days',
+  'duration', 'phase', 'n_ab', 'events_ab', 'n_comp', 'events_comp',
+  'all_grades%', 'grade_3_4%', 'grade_5%',
+  'source'
+];
 
 export default function DataTable() {
   const { table, filters, search, results, loading, applyFilters, sortBy, sortDir } = useFilter();
