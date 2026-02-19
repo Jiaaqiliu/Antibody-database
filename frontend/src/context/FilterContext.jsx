@@ -5,11 +5,10 @@ const FilterContext = createContext(null);
 
 const TABLE_LABELS = {
   ctgov_all: 'CTGOV – All Events',
-  ctgov_serious: 'CTGOV – Serious Events',
-  ctgov_other: 'CTGOV – Other Events',
   label_final: 'FDA Label – Final',
   label_bbw: 'FDA Label – BBW',
   label_wap: 'FDA Label – WAP',
+  fc_mutations: 'Fc Antibody Mutations',
 };
 
 const DISTRIBUTION_CHARTS = [

@@ -1,15 +1,16 @@
 """
-Data ingestion: Convert all 6 Excel sheets into SQLite for fast querying.
+Data ingestion: Convert Excel sheets into SQLite for fast querying.
 Sheets:
-  CTGOV_all, CTGOV_serious, CTGOV_other  (source=CTGOV)
-  Label_Final, Label_BBW, Label_WAP       (source=FDA)
+  CTGOV_all                  (source=CTGOV)
+  Label_Final, Label_BBW, Label_WAP  (source=FDA)
+  Fc Antibody mutations      (Fc mutation information)
 """
 import sqlite3
 import pandas as pd
 import os
 import json
 
-EXCEL_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "Full_mab_datasets.xlsx")
+EXCEL_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "Full_mab_datasets_18Feb26 1.xlsx")
 DB_PATH = os.path.join(os.path.dirname(__file__), "mab_database.sqlite")
 
 
@@ -41,11 +42,10 @@ def ingest():
     print(f"Reading Excel: {EXCEL_PATH}")
     sheets = {
         "ctgov_all": "CTGOV_all",
-        "ctgov_serious": "CTGOV_serious",
-        "ctgov_other": "CTGOV_other",
         "label_final": "Label_Final",
         "label_bbw": "Label_BBW",
         "label_wap": "Label_WAP",
+        "fc_mutations": "Fc Antibody mutations",
     }
 
     if os.path.exists(DB_PATH):
@@ -76,15 +76,14 @@ def ingest():
         }
         print(f"    -> {len(df)} rows, {len(df.columns)} columns")
 
-    # Create indexes for common filter columns
     common_indexes = [
-        ("antibody", ["ctgov_all", "ctgov_serious", "ctgov_other", "label_final", "label_bbw", "label_wap"]),
-        ("organ_system", ["ctgov_all", "ctgov_serious", "ctgov_other", "label_final", "label_bbw", "label_wap"]),
-        ("adverse_event_term", ["ctgov_all", "ctgov_serious", "ctgov_other", "label_final", "label_bbw", "label_wap"]),
-        ("condition", ["ctgov_all", "ctgov_serious", "ctgov_other", "label_final", "label_bbw", "label_wap"]),
-        ("general_molecular_category", ["ctgov_all", "ctgov_serious", "ctgov_other", "label_final", "label_bbw", "label_wap"]),
-        ("record_category", ["ctgov_all", "ctgov_serious", "ctgov_other", "label_final", "label_bbw", "label_wap"]),
-        ("source", ["ctgov_all", "ctgov_serious", "ctgov_other"]),
+        ("antibody", ["ctgov_all", "label_final", "label_bbw", "label_wap", "fc_mutations"]),
+        ("organ_system", ["ctgov_all", "label_final", "label_bbw", "label_wap"]),
+        ("adverse_event_term", ["ctgov_all", "label_final", "label_bbw", "label_wap"]),
+        ("condition", ["ctgov_all", "label_final", "label_bbw", "label_wap"]),
+        ("general_molecular_category", ["ctgov_all", "label_final", "label_bbw", "label_wap"]),
+        ("record_category", ["ctgov_all", "label_final", "label_bbw", "label_wap"]),
+        ("source", ["ctgov_all"]),
     ]
     for col, tables in common_indexes:
         for t in tables:

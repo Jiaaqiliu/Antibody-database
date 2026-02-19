@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "mab_database.sqlite")
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
-VALID_TABLES = ["ctgov_all", "ctgov_serious", "ctgov_other", "label_final", "label_bbw", "label_wap"]
+VALID_TABLES = ["ctgov_all", "label_final", "label_bbw", "label_wap", "fc_mutations"]
 
 FILTERABLE_COLUMNS = {
     "ctgov": [
@@ -26,6 +26,9 @@ FILTERABLE_COLUMNS = {
         "antibody", "general_molecular_category", "format_general_category",
         "isotype_fc", "record_category", "target_1", "condition",
         "organ_system", "moa_new", "source", "bbw", "wap",
+    ],
+    "fc_mutations": [
+        "antibody", "heavy_chain", "gene", "species", "effect",
     ],
 }
 
@@ -51,7 +54,12 @@ def quote_col(col: str) -> str:
 
 
 def table_type(table: str) -> str:
-    return "ctgov" if table.startswith("ctgov") else "label"
+    if table.startswith("ctgov"):
+        return "ctgov"
+    elif table == "fc_mutations":
+        return "fc_mutations"
+    else:
+        return "label"
 
 
 def build_where(table: str, filters: dict, search: Optional[str] = None):
