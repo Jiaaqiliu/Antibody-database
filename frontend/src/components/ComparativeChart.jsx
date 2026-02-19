@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Select from 'react-select';
 import Plot from 'react-plotly.js';
-import { fetchComparative, fetchStudies } from '../api';
+import { fetchComparative, fetchStudies, fetchAntibodiesWithComparator } from '../api';
 import { useFilter } from '../context/FilterContext';
 
 const miniSelectStyles = {
@@ -22,17 +22,21 @@ const miniSelectStyles = {
 };
 
 export default function ComparativeChart() {
-  const { table, filterOptions, isCtgov } = useFilter();
+  const { table, isCtgov } = useFilter();
   const [antibody, setAntibody] = useState(null);
   const [nctId, setNctId] = useState(null);
   const [studies, setStudies] = useState([]);
   const [groupBy, setGroupBy] = useState('organ_system');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [antibodyOptions, setAntibodyOptions] = useState([]);
 
-  const antibodyOptions = (filterOptions.antibody || []).map(a => ({ value: a, label: a }));
-
-  useEffect(() => { setAntibody(null); setNctId(null); setData(null); setStudies([]); }, [table]);
+  useEffect(() => {
+    fetchAntibodiesWithComparator(table).then(r => {
+      setAntibodyOptions(r.antibodies.map(a => ({ value: a, label: a })));
+    }).catch(() => setAntibodyOptions([]));
+    setAntibody(null); setNctId(null); setData(null); setStudies([]);
+  }, [table]);
 
   useEffect(() => {
     if (!antibody || !isCtgov) return;
@@ -140,41 +144,45 @@ export default function ComparativeChart() {
             />
             {data.relative_risk && data.relative_risk.values.some(v => v !== null) && (
               <div className="mt-4 border-t border-slate-100 pt-4">
-                <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Relative Risk (95% CI)</h4>
+                <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                  {isCtgov ? 'Relative Risk (95% CI)' : 'Pooled Relative Risk'} - Sorted by RR
+                </h4>
                 <div className="max-h-48 overflow-y-auto">
                   <table className="w-full text-xs">
                     <thead className="sticky top-0 bg-slate-50">
                       <tr>
                         <th className="text-left py-1.5 px-2 font-semibold text-slate-600">Category</th>
-                        <th className="text-right py-1.5 px-2 font-semibold text-slate-600">RR</th>
-                        <th className="text-right py-1.5 px-2 font-semibold text-slate-600">95% CI</th>
+                        <th className="text-right py-1.5 px-2 font-semibold text-slate-600">{isCtgov ? 'RR' : 'Pooled RR'}</th>
+                        <th className="text-right py-1.5 px-2 font-semibold text-slate-600">{isCtgov ? '95% CI' : '-'}</th>
                         <th className="text-center py-1.5 px-2 font-semibold text-slate-600">Significance</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {data.ab_arm.categories.map((cat, i) => {
-                        const rr = data.relative_risk.values[i];
-                        const ciL = data.relative_risk.ci_lower[i];
-                        const ciU = data.relative_risk.ci_upper[i];
-                        const isSignificant = ciL && ciU && (ciL > 1 || ciU < 1);
-                        if (rr === null) return null;
-                        return (
-                          <tr key={cat} className="border-t border-slate-100 hover:bg-slate-50">
-                            <td className="py-1.5 px-2 text-slate-700">{cat}</td>
-                            <td className={`py-1.5 px-2 text-right font-medium ${rr > 1 ? 'text-rose-600' : rr < 1 ? 'text-emerald-600' : 'text-slate-600'}`}>{rr}</td>
-                            <td className="py-1.5 px-2 text-right text-slate-500">{ciL && ciU ? `${ciL} - ${ciU}` : '-'}</td>
-                            <td className="py-1.5 px-2 text-center">
-                              {isSignificant ? (
-                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${rr > 1 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                                  {rr > 1 ? '↑ Risk' : '↓ Risk'}
-                                </span>
-                              ) : (
-                                <span className="text-slate-400">-</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
+                      {data.ab_arm.categories
+                        .map((cat, i) => ({ cat, i, rr: data.relative_risk.values[i] }))
+                        .filter(item => item.rr !== null)
+                        .sort((a, b) => (b.rr || 0) - (a.rr || 0))
+                        .map(({ cat, i, rr }) => {
+                          const ciL = data.relative_risk.ci_lower[i];
+                          const ciU = data.relative_risk.ci_upper[i];
+                          const isSignificant = ciL && ciU && (ciL > 1 || ciU < 1);
+                          return (
+                            <tr key={cat} className="border-t border-slate-100 hover:bg-slate-50">
+                              <td className="py-1.5 px-2 text-slate-700">{cat}</td>
+                              <td className={`py-1.5 px-2 text-right font-medium ${rr > 1 ? 'text-rose-600' : rr < 1 ? 'text-emerald-600' : 'text-slate-600'}`}>{rr}</td>
+                              <td className="py-1.5 px-2 text-right text-slate-500">{ciL && ciU ? `${ciL} - ${ciU}` : '-'}</td>
+                              <td className="py-1.5 px-2 text-center">
+                                {isSignificant ? (
+                                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${rr > 1 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                    {rr > 1 ? '↑ Risk' : '↓ Risk'}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400">-</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                     </tbody>
                   </table>
                 </div>

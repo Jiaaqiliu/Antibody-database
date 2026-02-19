@@ -29,7 +29,7 @@ FILTERABLE_COLUMNS = {
     ],
 }
 
-app = FastAPI(title="MAb Database API")
+app = FastAPI(title="Therapeutic Antibody Commons API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
@@ -85,7 +85,7 @@ class AEChartRequest(BaseModel):
     group_by: str = "organ_system"
     filters: dict = {}
     search: Optional[str] = None
-    top_n: int = 20
+    top_n: int = 25
 
 
 class ComparativeRequest(BaseModel):
@@ -202,9 +202,9 @@ def chart_distribution(table: str = "ctgov_all", column: str = "general_molecula
             pass
 
     where, params = build_where(table, filter_dict, search)
-    sql = f'SELECT {quote_col(column)} as label, COUNT(*) as cnt FROM {table}{where} AND {quote_col(column)} IS NOT NULL GROUP BY {quote_col(column)} ORDER BY cnt DESC'
+    sql = f'SELECT {quote_col(column)} as label, COUNT(DISTINCT {quote_col("antibody")}) as cnt FROM {table}{where} AND {quote_col(column)} IS NOT NULL GROUP BY {quote_col(column)} ORDER BY cnt DESC'
     if not where:
-        sql = f'SELECT {quote_col(column)} as label, COUNT(*) as cnt FROM {table} WHERE {quote_col(column)} IS NOT NULL GROUP BY {quote_col(column)} ORDER BY cnt DESC'
+        sql = f'SELECT {quote_col(column)} as label, COUNT(DISTINCT {quote_col("antibody")}) as cnt FROM {table} WHERE {quote_col(column)} IS NOT NULL GROUP BY {quote_col(column)} ORDER BY cnt DESC'
 
     rows = conn.execute(sql, params).fetchall()
     conn.close()
@@ -223,17 +223,17 @@ def chart_adverse_events(req: AEChartRequest):
         base_where = where if where else " WHERE 1=1"
         sql = f'''
             SELECT {gcol} as category,
-                   SUM(CAST(events_ab AS REAL)) as total_events,
-                   SUM(CAST(n_ab AS REAL)) as total_n
+                   AVG(CAST(events_ab AS REAL) * 100.0 / CAST(n_ab AS REAL)) as avg_pct,
+                   COUNT(*) as record_count
             FROM {req.table}{base_where} AND {gcol} IS NOT NULL AND events_ab IS NOT NULL AND n_ab IS NOT NULL AND n_ab > 0
             GROUP BY {gcol}
-            ORDER BY total_events DESC
+            ORDER BY avg_pct DESC
             LIMIT ?
         '''
         rows = conn.execute(sql, params + [req.top_n]).fetchall()
         categories = [r["category"] for r in rows]
-        proportions = [round(r["total_events"] / r["total_n"] * 100, 2) if r["total_n"] else 0 for r in rows]
-        counts = [r["total_events"] for r in rows]
+        proportions = [round(r["avg_pct"], 2) if r["avg_pct"] else 0 for r in rows]
+        counts = [r["record_count"] for r in rows]
     else:
         base_where = where if where else " WHERE 1=1"
         pct_col = quote_col("all_grades%")
@@ -273,19 +273,21 @@ def chart_comparative(req: ComparativeRequest):
 
         sql = f'''
             SELECT {gcol} as category,
-                   SUM(CAST(events_ab AS REAL)) as ab_events,
-                   MAX(CAST(n_ab AS REAL)) as ab_n,
-                   SUM(CAST(events_comp AS REAL)) as comp_events,
-                   MAX(CAST(n_comp AS REAL)) as comp_n
+                   AVG(CAST(events_ab AS REAL) * 100.0 / CAST(n_ab AS REAL)) as ab_pct,
+                   AVG(CASE WHEN n_comp > 0 THEN CAST(events_comp AS REAL) * 100.0 / CAST(n_comp AS REAL) ELSE NULL END) as comp_pct,
+                   AVG(CAST(events_ab AS REAL)) as avg_ab_events,
+                   AVG(CAST(n_ab AS REAL)) as avg_ab_n,
+                   AVG(CAST(events_comp AS REAL)) as avg_comp_events,
+                   AVG(CAST(n_comp AS REAL)) as avg_comp_n
             FROM {req.table}{where}
             GROUP BY {gcol}
-            ORDER BY ab_events DESC
+            ORDER BY ab_pct DESC
             LIMIT ?
         '''
         rows = conn.execute(sql, params + [req.top_n]).fetchall()
         categories = [r["category"] for r in rows]
-        ab_proportions = [round(r["ab_events"] / r["ab_n"] * 100, 2) if r["ab_n"] else 0 for r in rows]
-        comp_proportions = [round(r["comp_events"] / r["comp_n"] * 100, 2) if r["comp_n"] else 0 for r in rows]
+        ab_proportions = [round(r["ab_pct"], 2) if r["ab_pct"] else 0 for r in rows]
+        comp_proportions = [round(r["comp_pct"], 2) if r["comp_pct"] else 0 for r in rows]
     else:
         pct_col = quote_col("all_grades%")
         comp_pct_col = quote_col("comp_all_grades%")
@@ -313,15 +315,22 @@ def chart_comparative(req: ComparativeRequest):
     if tt == "ctgov":
         for r in rows:
             rr, ci_l, ci_u = calc_relative_risk(
-                r["ab_events"], r["ab_n"], r["comp_events"], r["comp_n"]
+                r["avg_ab_events"], r["avg_ab_n"], r["avg_comp_events"], r["avg_comp_n"]
             )
             rr_values.append(rr)
             rr_ci_lower.append(ci_l)
             rr_ci_upper.append(ci_u)
     else:
-        rr_values = [None] * len(categories)
-        rr_ci_lower = [None] * len(categories)
-        rr_ci_upper = [None] * len(categories)
+        for r in rows:
+            ab_pct = r["ab_pct"] if r["ab_pct"] else 0
+            comp_pct = r["comp_pct"] if r["comp_pct"] else 0
+            if comp_pct > 0:
+                rr = round(ab_pct / comp_pct, 3)
+                rr_values.append(rr)
+            else:
+                rr_values.append(None)
+            rr_ci_lower.append(None)
+            rr_ci_upper.append(None)
 
     conn.close()
     return {
@@ -336,18 +345,16 @@ def chart_cross_dataset(req: CrossDatasetRequest):
     conn = get_conn()
     gcol = quote_col(req.group_by)
     
-    # Use LOWER() for case-insensitive matching since get_overlapping_antibodies returns lowercase
     ctgov_sql = f'''
         SELECT {gcol} as category,
-               SUM(CAST(events_ab AS REAL)) as total_events,
-               MAX(CAST(n_ab AS REAL)) as total_n
+               AVG(CAST(events_ab AS REAL) * 100.0 / CAST(n_ab AS REAL)) as avg_pct
         FROM ctgov_all
         WHERE LOWER({quote_col("antibody")}) = LOWER(?) AND {gcol} IS NOT NULL 
               AND events_ab IS NOT NULL AND n_ab IS NOT NULL AND n_ab > 0
         GROUP BY {gcol}
     '''
     ctgov_rows = conn.execute(ctgov_sql, [req.antibody]).fetchall()
-    ctgov_data = {r["category"]: round(r["total_events"] / r["total_n"] * 100, 2) if r["total_n"] else 0 for r in ctgov_rows}
+    ctgov_data = {r["category"]: round(r["avg_pct"], 2) if r["avg_pct"] else 0 for r in ctgov_rows}
     
     pct_col = quote_col("all_grades%")
     label_sql = f'''
@@ -387,8 +394,7 @@ def chart_target_aggregation(req: TargetAggregationRequest):
         sql = f'''
             SELECT {gcol} as category,
                    antibody,
-                   SUM(CAST(events_ab AS REAL)) as total_events,
-                   MAX(CAST(n_ab AS REAL)) as total_n
+                   AVG(CAST(events_ab AS REAL) * 100.0 / CAST(n_ab AS REAL)) as avg_pct
             FROM {req.table}
             WHERE {quote_col("target_1")} = ? AND {gcol} IS NOT NULL 
                   AND events_ab IS NOT NULL AND n_ab IS NOT NULL AND n_ab > 0
@@ -399,7 +405,7 @@ def chart_target_aggregation(req: TargetAggregationRequest):
         category_stats = {}
         for r in rows:
             cat = r["category"]
-            pct = round(r["total_events"] / r["total_n"] * 100, 2) if r["total_n"] else 0
+            pct = round(r["avg_pct"], 2) if r["avg_pct"] else 0
             if cat not in category_stats:
                 category_stats[cat] = []
             category_stats[cat].append(pct)
@@ -468,6 +474,33 @@ def get_targets(table: str = "ctgov_all"):
     ).fetchall()
     conn.close()
     return {"targets": [r[0] for r in rows]}
+
+
+@app.get("/api/antibodies-with-comparator")
+def get_antibodies_with_comparator(table: str = "ctgov_all"):
+    validate_table(table)
+    conn = get_conn()
+    tt = table_type(table)
+    
+    if tt == "ctgov":
+        rows = conn.execute(
+            f'''SELECT DISTINCT {quote_col("antibody")} 
+                FROM {table} 
+                WHERE {quote_col("antibody")} IS NOT NULL 
+                  AND n_comp IS NOT NULL AND n_comp > 0
+                ORDER BY {quote_col("antibody")}'''
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            f'''SELECT DISTINCT {quote_col("antibody")} 
+                FROM {table} 
+                WHERE {quote_col("antibody")} IS NOT NULL 
+                  AND {quote_col("comp_all_grades%")} IS NOT NULL
+                ORDER BY {quote_col("antibody")}'''
+        ).fetchall()
+    
+    conn.close()
+    return {"antibodies": [r[0] for r in rows]}
 
 
 @app.get("/api/studies")

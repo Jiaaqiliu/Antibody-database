@@ -21,8 +21,8 @@ export default function Header() {
             </svg>
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white tracking-tight">Antibody Database Explorer</h1>
-            <p className="text-xs text-indigo-300/80 font-medium tracking-wide">Monoclonal antibody safety & clinical development data</p>
+            <h1 className="text-xl font-bold text-white tracking-tight">Therapeutic Antibody Commons</h1>
+            <p className="text-xs text-indigo-300/80 font-medium tracking-wide">TAC · Monoclonal antibody safety & clinical development data</p>
           </div>
         </div>
         <div className="flex items-center gap-3">

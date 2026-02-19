@@ -32,7 +32,7 @@ export default function App() {
         </main>
         <footer className="max-w-screen-2xl mx-auto px-8 pb-8 pt-4">
           <div className="border-t border-slate-200/60 pt-4 flex items-center justify-between">
-            <p className="text-xs text-slate-400">Antibody Database Explorer</p>
+            <p className="text-xs text-slate-400">Therapeutic Antibody Commons (TAC)</p>
             <p className="text-xs text-slate-300">Built for mAb safety analysis</p>
           </div>
         </footer>

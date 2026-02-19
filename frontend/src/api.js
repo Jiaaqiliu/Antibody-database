@@ -47,7 +47,7 @@ export function fetchAdverseEvents({ table, groupBy, filters, search, topN }) {
       group_by: groupBy || 'organ_system',
       filters: filters || {},
       search: search || null,
-      top_n: topN || 20,
+      top_n: topN || 25,
     }),
   });
 }
@@ -105,4 +105,8 @@ export function fetchOverlappingAntibodies() {
 
 export function fetchTargets(table) {
   return request(`/targets?table=${table}`);
+}
+
+export function fetchAntibodiesWithComparator(table) {
+  return request(`/antibodies-with-comparator?table=${table}`);
 }
