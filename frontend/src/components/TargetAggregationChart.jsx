@@ -55,7 +55,7 @@ export default function TargetAggregationChart() {
       <div className="px-6 py-4 border-b border-slate-100/80">
         <div className="flex items-center gap-2.5 mb-4">
           <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center">
-            <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+            <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 0a6 6 0 1012 0 6 6 0 00-12 0zm6 0a3 3 0 110-6 3 3 0 010 6z" /><circle cx="12" cy="12" r="1" fill="currentColor" /></svg>
           </div>
           <div>
             <h3 className="text-sm font-bold text-slate-700">Target Aggregation Analysis</h3>
@@ -108,7 +108,7 @@ export default function TargetAggregationChart() {
           <div className="h-72 flex items-center justify-center">
             <div className="text-center">
               <div className="h-12 w-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
-                <svg className="h-6 w-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                <svg className="h-6 w-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 0a6 6 0 1012 0 6 6 0 00-12 0zm6 0a3 3 0 110-6 3 3 0 010 6z" /></svg>
               </div>
               <p className="text-sm text-slate-400 font-medium">Select a target to view aggregated AE data</p>
             </div>
@@ -141,7 +141,7 @@ export default function TargetAggregationChart() {
               layout={{
                 margin: { t: 8, b: 40, l: 280, r: 24 },
                 xaxis: { title: { text: 'Proportion (%)', font: { size: 11, color: '#94a3b8', family: 'Inter' } }, tickfont: { size: 11, color: '#94a3b8', family: 'Inter' }, gridcolor: '#f1f5f9', zeroline: false },
-                yaxis: { tickfont: { size: 11, color: '#475569', family: 'Inter' }, automargin: true },
+                yaxis: { tickfont: { size: 11, color: '#475569', family: 'Inter' }, automargin: true, categoryorder: 'total ascending' },
                 paper_bgcolor: 'transparent',
                 plot_bgcolor: 'transparent',
                 font: { family: 'Inter, sans-serif' },

@@ -138,7 +138,7 @@ export default function CrossDatasetChart() {
                 barmode: 'group',
                 margin: { t: 8, b: 40, l: 280, r: 24 },
                 xaxis: { title: { text: 'Proportion (%)', font: { size: 11, color: '#94a3b8', family: 'Inter' } }, tickfont: { size: 11, color: '#94a3b8', family: 'Inter' }, gridcolor: '#f1f5f9', zeroline: false },
-                yaxis: { tickfont: { size: 11, color: '#475569', family: 'Inter' }, automargin: true },
+                yaxis: { tickfont: { size: 11, color: '#475569', family: 'Inter' }, automargin: true, categoryorder: 'total ascending' },
                 legend: { orientation: 'h', y: 1.08, font: { size: 12, family: 'Inter', color: '#64748b' } },
                 paper_bgcolor: 'transparent',
                 plot_bgcolor: 'transparent',
