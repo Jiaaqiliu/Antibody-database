@@ -94,6 +94,7 @@ class AEChartRequest(BaseModel):
     filters: dict = {}
     search: Optional[str] = None
     top_n: int = 25
+    grade_col: str = "all_grades%"
 
 
 class ComparativeRequest(BaseModel):
@@ -101,12 +102,14 @@ class ComparativeRequest(BaseModel):
     antibody: str
     nct_id: Optional[str] = None
     group_by: str = "organ_system"
+    filters: dict = {}
     top_n: int = 15
 
 
 class CrossDatasetRequest(BaseModel):
     antibody: str
     group_by: str = "organ_system"
+    filters: dict = {}
     top_n: int = 15
 
 
@@ -114,6 +117,7 @@ class TargetAggregationRequest(BaseModel):
     table: str = "ctgov_all"
     target: str
     group_by: str = "organ_system"
+    filters: dict = {}
     top_n: int = 15
 
 
@@ -244,7 +248,10 @@ def chart_adverse_events(req: AEChartRequest):
         counts = [r["record_count"] for r in rows]
     else:
         base_where = where if where else " WHERE 1=1"
-        pct_col = quote_col("all_grades%")
+        # Validate grade column to prevent SQL injection
+        valid_grade_cols = ["all_grades%", "grade_3_4%", "grade_5%"]
+        grade_col = req.grade_col if req.grade_col in valid_grade_cols else "all_grades%"
+        pct_col = quote_col(grade_col)
         sql = f'''
             SELECT {gcol} as category,
                    AVG(CAST({pct_col} AS REAL)) as avg_pct,
@@ -270,6 +277,15 @@ def chart_comparative(req: ComparativeRequest):
     tt = table_type(req.table)
     gcol = quote_col(req.group_by)
 
+    # Build filter conditions
+    filter_clauses = []
+    filter_params = []
+    for col, values in req.filters.items():
+        if values:
+            placeholders = ",".join(["?"] * len(values))
+            filter_clauses.append(f'{quote_col(col)} IN ({placeholders})')
+            filter_params.extend(values)
+
     if tt == "ctgov":
         where_parts = [f'{quote_col("antibody")} = ?', f'{gcol} IS NOT NULL']
         params = [req.antibody]
@@ -277,6 +293,8 @@ def chart_comparative(req: ComparativeRequest):
             where_parts.append(f'{quote_col("nct_id")} = ?')
             params.append(req.nct_id)
         where_parts.append("n_ab IS NOT NULL AND n_ab > 0")
+        where_parts.extend(filter_clauses)
+        params.extend(filter_params)
         where = " WHERE " + " AND ".join(where_parts)
 
         sql = f'''
@@ -299,8 +317,11 @@ def chart_comparative(req: ComparativeRequest):
     else:
         pct_col = quote_col("all_grades%")
         comp_pct_col = quote_col("comp_all_grades%")
-        where = f' WHERE {quote_col("antibody")} = ? AND {gcol} IS NOT NULL'
+        where_parts = [f'{quote_col("antibody")} = ?', f'{gcol} IS NOT NULL']
         params = [req.antibody]
+        where_parts.extend(filter_clauses)
+        params.extend(filter_params)
+        where = " WHERE " + " AND ".join(where_parts)
 
         sql = f'''
             SELECT {gcol} as category,
@@ -353,15 +374,28 @@ def chart_cross_dataset(req: CrossDatasetRequest):
     conn = get_conn()
     gcol = quote_col(req.group_by)
     
+    # Build filter conditions
+    filter_clauses = []
+    filter_params = []
+    for col, values in req.filters.items():
+        if values:
+            placeholders = ",".join(["?"] * len(values))
+            filter_clauses.append(f'{quote_col(col)} IN ({placeholders})')
+            filter_params.extend(values)
+    
+    filter_sql = ""
+    if filter_clauses:
+        filter_sql = " AND " + " AND ".join(filter_clauses)
+    
     ctgov_sql = f'''
         SELECT {gcol} as category,
                AVG(CAST(events_ab AS REAL) * 100.0 / CAST(n_ab AS REAL)) as avg_pct
         FROM ctgov_all
         WHERE LOWER({quote_col("antibody")}) = LOWER(?) AND {gcol} IS NOT NULL 
-              AND events_ab IS NOT NULL AND n_ab IS NOT NULL AND n_ab > 0
+              AND events_ab IS NOT NULL AND n_ab IS NOT NULL AND n_ab > 0{filter_sql}
         GROUP BY {gcol}
     '''
-    ctgov_rows = conn.execute(ctgov_sql, [req.antibody]).fetchall()
+    ctgov_rows = conn.execute(ctgov_sql, [req.antibody] + filter_params).fetchall()
     ctgov_data = {r["category"]: round(r["avg_pct"], 2) if r["avg_pct"] else 0 for r in ctgov_rows}
     
     pct_col = quote_col("all_grades%")
@@ -369,10 +403,10 @@ def chart_cross_dataset(req: CrossDatasetRequest):
         SELECT {gcol} as category,
                AVG(CAST({pct_col} AS REAL)) as avg_pct
         FROM label_final
-        WHERE LOWER({quote_col("antibody")}) = LOWER(?) AND {gcol} IS NOT NULL AND {pct_col} IS NOT NULL
+        WHERE LOWER({quote_col("antibody")}) = LOWER(?) AND {gcol} IS NOT NULL AND {pct_col} IS NOT NULL{filter_sql}
         GROUP BY {gcol}
     '''
-    label_rows = conn.execute(label_sql, [req.antibody]).fetchall()
+    label_rows = conn.execute(label_sql, [req.antibody] + filter_params).fetchall()
     label_data = {r["category"]: round(r["avg_pct"], 2) if r["avg_pct"] else 0 for r in label_rows}
     
     all_categories = sorted(set(ctgov_data.keys()) | set(label_data.keys()))
@@ -398,6 +432,19 @@ def chart_target_aggregation(req: TargetAggregationRequest):
     tt = table_type(req.table)
     gcol = quote_col(req.group_by)
     
+    # Build filter conditions
+    filter_clauses = []
+    filter_params = []
+    for col, values in req.filters.items():
+        if values:
+            placeholders = ",".join(["?"] * len(values))
+            filter_clauses.append(f'{quote_col(col)} IN ({placeholders})')
+            filter_params.extend(values)
+    
+    filter_sql = ""
+    if filter_clauses:
+        filter_sql = " AND " + " AND ".join(filter_clauses)
+    
     if tt == "ctgov":
         sql = f'''
             SELECT {gcol} as category,
@@ -405,18 +452,22 @@ def chart_target_aggregation(req: TargetAggregationRequest):
                    AVG(CAST(events_ab AS REAL) * 100.0 / CAST(n_ab AS REAL)) as avg_pct
             FROM {req.table}
             WHERE {quote_col("target_1")} = ? AND {gcol} IS NOT NULL 
-                  AND events_ab IS NOT NULL AND n_ab IS NOT NULL AND n_ab > 0
+                  AND events_ab IS NOT NULL AND n_ab IS NOT NULL AND n_ab > 0{filter_sql}
             GROUP BY {gcol}, antibody
         '''
-        rows = conn.execute(sql, [req.target]).fetchall()
+        rows = conn.execute(sql, [req.target] + filter_params).fetchall()
         
         category_stats = {}
+        antibody_data = {}
         for r in rows:
             cat = r["category"]
+            ab = r["antibody"]
             pct = round(r["avg_pct"], 2) if r["avg_pct"] else 0
             if cat not in category_stats:
                 category_stats[cat] = []
+                antibody_data[cat] = []
             category_stats[cat].append(pct)
+            antibody_data[cat].append({"antibody": ab, "proportion": pct})
     else:
         pct_col = quote_col("all_grades%")
         sql = f'''
@@ -424,28 +475,35 @@ def chart_target_aggregation(req: TargetAggregationRequest):
                    antibody,
                    AVG(CAST({pct_col} AS REAL)) as avg_pct
             FROM {req.table}
-            WHERE {quote_col("target_1")} = ? AND {gcol} IS NOT NULL AND {pct_col} IS NOT NULL
+            WHERE {quote_col("target_1")} = ? AND {gcol} IS NOT NULL AND {pct_col} IS NOT NULL{filter_sql}
             GROUP BY {gcol}, antibody
         '''
-        rows = conn.execute(sql, [req.target]).fetchall()
+        rows = conn.execute(sql, [req.target] + filter_params).fetchall()
         
         category_stats = {}
+        antibody_data = {}
         for r in rows:
             cat = r["category"]
+            ab = r["antibody"]
             pct = round(r["avg_pct"], 2) if r["avg_pct"] else 0
             if cat not in category_stats:
                 category_stats[cat] = []
+                antibody_data[cat] = []
             category_stats[cat].append(pct)
+            antibody_data[cat].append({"antibody": ab, "proportion": pct})
     
     result = []
     for cat, values in category_stats.items():
         if values:
+            # Sort antibodies by proportion descending
+            ab_list = sorted(antibody_data.get(cat, []), key=lambda x: x["proportion"], reverse=True)
             result.append({
                 "category": cat,
                 "mean": round(sum(values) / len(values), 2),
                 "min": round(min(values), 2),
                 "max": round(max(values), 2),
                 "count": len(values),
+                "antibodies": ab_list,
             })
     
     result.sort(key=lambda x: x["mean"], reverse=True)

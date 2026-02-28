@@ -16,13 +16,14 @@ const miniSelectStyles = {
     '&:hover': { borderColor: '#c7d2fe' },
   }),
   placeholder: (base) => ({ ...base, color: '#94a3b8', fontSize: '0.8125rem' }),
-  menu: (base) => ({ ...base, zIndex: 40, borderRadius: '0.75rem', boxShadow: '0 10px 40px -10px rgba(0,0,0,0.12)', border: '1px solid #e2e8f0' }),
+  menu: (base) => ({ ...base, zIndex: 9999, borderRadius: '0.75rem', boxShadow: '0 10px 40px -10px rgba(0,0,0,0.12)', border: '1px solid #e2e8f0' }),
+  menuPortal: (base) => ({ ...base, zIndex: 9999 }),
   option: (base, state) => ({ ...base, fontSize: '0.8125rem', backgroundColor: state.isFocused ? '#eef2ff' : 'transparent', color: state.isFocused ? '#4338ca' : '#475569' }),
   indicatorSeparator: () => ({ display: 'none' }),
 };
 
 export default function ComparativeChart() {
-  const { table, isCtgov } = useFilter();
+  const { table, filters, isCtgov } = useFilter();
   const [antibody, setAntibody] = useState(null);
   const [nctId, setNctId] = useState(null);
   const [studies, setStudies] = useState([]);
@@ -50,7 +51,7 @@ export default function ComparativeChart() {
     if (!antibody) return;
     setLoading(true);
     try {
-      setData(await fetchComparative({ table, antibody: antibody.value, nctId: nctId?.value, groupBy }));
+      setData(await fetchComparative({ table, antibody: antibody.value, nctId: nctId?.value, groupBy, filters }));
     } catch {
       setData(null);
     }
@@ -74,12 +75,12 @@ export default function ComparativeChart() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div>
             <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Antibody</label>
-            <Select options={antibodyOptions} value={antibody} onChange={setAntibody} isClearable placeholder="Select..." styles={miniSelectStyles} maxMenuHeight={200} />
+            <Select options={antibodyOptions} value={antibody} onChange={setAntibody} isClearable placeholder="Select..." styles={miniSelectStyles} maxMenuHeight={200} menuPlacement="auto" menuPortalTarget={document.body} />
           </div>
           {isCtgov && (
             <div>
               <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Study (NCT ID)</label>
-              <Select options={studies} value={nctId} onChange={setNctId} isClearable placeholder="All studies..." styles={miniSelectStyles} maxMenuHeight={200} />
+              <Select options={studies} value={nctId} onChange={setNctId} isClearable placeholder="All studies..." styles={miniSelectStyles} maxMenuHeight={200} menuPlacement="auto" menuPortalTarget={document.body} />
             </div>
           )}
           <div>

@@ -16,13 +16,14 @@ const miniSelectStyles = {
     '&:hover': { borderColor: '#c7d2fe' },
   }),
   placeholder: (base) => ({ ...base, color: '#94a3b8', fontSize: '0.8125rem' }),
-  menu: (base) => ({ ...base, zIndex: 40, borderRadius: '0.75rem', boxShadow: '0 10px 40px -10px rgba(0,0,0,0.12)', border: '1px solid #e2e8f0' }),
+  menu: (base) => ({ ...base, zIndex: 9999, borderRadius: '0.75rem', boxShadow: '0 10px 40px -10px rgba(0,0,0,0.12)', border: '1px solid #e2e8f0' }),
+  menuPortal: (base) => ({ ...base, zIndex: 9999 }),
   option: (base, state) => ({ ...base, fontSize: '0.8125rem', backgroundColor: state.isFocused ? '#eef2ff' : 'transparent', color: state.isFocused ? '#4338ca' : '#475569' }),
   indicatorSeparator: () => ({ display: 'none' }),
 };
 
 export default function TargetAggregationChart() {
-  const { table } = useFilter();
+  const { table, filters } = useFilter();
   const [targets, setTargets] = useState([]);
   const [selectedTarget, setSelectedTarget] = useState(null);
   const [groupBy, setGroupBy] = useState('organ_system');
@@ -41,7 +42,7 @@ export default function TargetAggregationChart() {
     if (!selectedTarget) return;
     setLoading(true);
     try {
-      setData(await fetchTargetAggregation({ table, target: selectedTarget.value, groupBy }));
+      setData(await fetchTargetAggregation({ table, target: selectedTarget.value, groupBy, filters }));
     } catch {
       setData(null);
     }
@@ -75,6 +76,8 @@ export default function TargetAggregationChart() {
               placeholder="Select target (e.g., TNF-alpha)..."
               styles={miniSelectStyles}
               maxMenuHeight={200}
+              menuPlacement="auto"
+              menuPortalTarget={document.body}
             />
           </div>
           <div>
@@ -118,23 +121,21 @@ export default function TargetAggregationChart() {
             <Plot
               data={[
                 {
-                  type: 'bar',
-                  name: 'Mean',
-                  y: data.data.map(d => d.category),
-                  x: data.data.map(d => d.mean),
+                  type: 'box',
+                  y: data.data.flatMap(d => d.antibodies.map(ab => d.category)),
+                  x: data.data.flatMap(d => d.antibodies.map(ab => ab.proportion)),
                   orientation: 'h',
-                  marker: { color: 'rgba(6, 182, 212, 0.8)', line: { width: 0 } },
-                  error_x: {
-                    type: 'data',
-                    symmetric: false,
-                    array: data.data.map(d => d.max - d.mean),
-                    arrayminus: data.data.map(d => d.mean - d.min),
-                    color: '#94a3b8',
-                    thickness: 1.5,
-                    width: 4,
+                  boxpoints: 'all',
+                  jitter: 0.3,
+                  pointpos: 0,
+                  marker: { 
+                    color: 'rgba(6, 182, 212, 0.6)', 
+                    size: 6,
+                    line: { width: 1, color: 'rgba(6, 182, 212, 0.8)' }
                   },
-                  hovertemplate: '%{y}<br>Mean: %{x:.2f}%<br>Range: %{customdata[0]:.2f}% - %{customdata[1]:.2f}%<br>Antibodies: %{customdata[2]}<extra></extra>',
-                  customdata: data.data.map(d => [d.min, d.max, d.count]),
+                  line: { color: 'rgba(6, 182, 212, 1)', width: 2 },
+                  fillcolor: 'rgba(6, 182, 212, 0.3)',
+                  hovertemplate: '%{y}<br>Proportion: %{x:.2f}%<extra></extra>',
                   hoverlabel: { bgcolor: '#0891b2', font: { family: 'Inter', color: '#fff' }, bordercolor: 'transparent' },
                 },
               ]}
@@ -145,20 +146,50 @@ export default function TargetAggregationChart() {
                 paper_bgcolor: 'transparent',
                 plot_bgcolor: 'transparent',
                 font: { family: 'Inter, sans-serif' },
-                height: 400,
-                bargap: 0.3,
+                height: Math.max(400, data.data.length * 50),
                 showlegend: false,
               }}
               config={{ displayModeBar: false, responsive: true }}
               style={{ width: '100%' }}
               useResizeHandler
             />
-            <div className="mt-3 px-2 py-2 bg-slate-50 rounded-lg">
-              <p className="text-xs text-slate-500">
-                <span className="font-medium text-slate-600">Target: {data.target}</span>
-                <span className="mx-2">•</span>
-                Bars show mean AE proportion with error bars indicating min-max range across antibodies
-              </p>
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                Antibodies for {data.target} (by {groupBy === 'organ_system' ? 'Organ System' : 'AE Term'})
+              </h4>
+              <div className="max-h-64 overflow-y-auto space-y-2">
+                {data.data.slice(0, 10).map((d) => (
+                  <div key={d.category} className="bg-slate-50 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-slate-700">{d.category}</span>
+                      <span className="text-xs text-slate-500">
+                        {d.count} antibodies • Mean: {d.mean}% • Range: {d.min}% - {d.max}%
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {d.antibodies.slice(0, 8).map((ab) => (
+                        <span
+                          key={ab.antibody}
+                          className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-white border border-slate-200 text-slate-600"
+                        >
+                          {ab.antibody}
+                          <span className="ml-1 text-cyan-600 font-medium">{ab.proportion}%</span>
+                        </span>
+                      ))}
+                      {d.antibodies.length > 8 && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-500">
+                          +{d.antibodies.length - 8} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {data.data.length > 10 && (
+                  <div className="text-center text-xs text-slate-400 py-2">
+                    Showing top 10 categories • {data.data.length - 10} more available
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

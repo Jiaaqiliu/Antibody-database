@@ -4,8 +4,9 @@ import { fetchAdverseEvents } from '../api';
 import { useFilter } from '../context/FilterContext';
 
 export default function AdverseEventChart() {
-  const { table, filters, search, aeData } = useFilter();
+  const { table, filters, search, aeData, isCtgov } = useFilter();
   const [groupBy, setGroupBy] = useState('organ_system');
+  const [gradeCol, setGradeCol] = useState('all_grades%');
   const [localData, setLocalData] = useState(aeData);
   const [loading, setLoading] = useState(false);
 
@@ -15,7 +16,19 @@ export default function AdverseEventChart() {
     setGroupBy(newGroup);
     setLoading(true);
     try {
-      const data = await fetchAdverseEvents({ table, groupBy: newGroup, filters, search });
+      const data = await fetchAdverseEvents({ table, groupBy: newGroup, filters, search, gradeCol: isCtgov ? undefined : gradeCol });
+      setLocalData(data);
+    } catch {
+      setLocalData({ categories: [], proportions: [], counts: [] });
+    }
+    setLoading(false);
+  }
+
+  async function handleGradeChange(newGrade) {
+    setGradeCol(newGrade);
+    setLoading(true);
+    try {
+      const data = await fetchAdverseEvents({ table, groupBy, filters, search, gradeCol: newGrade });
       setLocalData(data);
     } catch {
       setLocalData({ categories: [], proportions: [], counts: [] });
@@ -27,27 +40,46 @@ export default function AdverseEventChart() {
 
   return (
     <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-sm shadow-slate-200/50 border border-slate-200/60 overflow-hidden">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100/80">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100/80 flex-wrap gap-3">
         <div className="flex items-center gap-2.5">
           <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center">
             <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
           </div>
           <h3 className="text-sm font-bold text-slate-700">Adverse Event Proportions</h3>
         </div>
-        <div className="flex bg-slate-100/80 rounded-xl p-1 gap-0.5">
-          {[['organ_system', 'Organ System'], ['adverse_event_term', 'AE Term']].map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => handleToggle(key)}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 ${
-                groupBy === key
-                  ? 'bg-white text-indigo-600 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="flex items-center gap-3">
+          {!isCtgov && (
+            <div className="flex bg-amber-50 rounded-xl p-1 gap-0.5 border border-amber-200/50">
+              {[['all_grades%', 'All Grades'], ['grade_3_4%', 'Grade 3-4'], ['grade_5%', 'Grade 5']].map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => handleGradeChange(key)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                    gradeCol === key
+                      ? 'bg-white text-amber-600 shadow-sm'
+                      : 'text-amber-600/70 hover:text-amber-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex bg-slate-100/80 rounded-xl p-1 gap-0.5">
+            {[['organ_system', 'Organ System'], ['adverse_event_term', 'AE Term']].map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => handleToggle(key)}
+                className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                  groupBy === key
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       <div className="p-6">

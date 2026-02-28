@@ -39,7 +39,7 @@ export function fetchDistribution(table, column, filters, search) {
   return request(`/chart/distribution?${params}`);
 }
 
-export function fetchAdverseEvents({ table, groupBy, filters, search, topN }) {
+export function fetchAdverseEvents({ table, groupBy, filters, search, topN, gradeCol }) {
   return request('/chart/adverse-events', {
     method: 'POST',
     body: JSON.stringify({
@@ -48,11 +48,12 @@ export function fetchAdverseEvents({ table, groupBy, filters, search, topN }) {
       filters: filters || {},
       search: search || null,
       top_n: topN || 25,
+      grade_col: gradeCol || 'all_grades%',
     }),
   });
 }
 
-export function fetchComparative({ table, antibody, nctId, groupBy, topN }) {
+export function fetchComparative({ table, antibody, nctId, groupBy, filters, topN }) {
   return request('/chart/comparative', {
     method: 'POST',
     body: JSON.stringify({
@@ -60,6 +61,7 @@ export function fetchComparative({ table, antibody, nctId, groupBy, topN }) {
       antibody,
       nct_id: nctId || null,
       group_by: groupBy || 'organ_system',
+      filters: filters || {},
       top_n: topN || 15,
     }),
   });
@@ -76,24 +78,26 @@ export function getExportUrl(table, filters, search) {
   return `${BASE}/export?${params}`;
 }
 
-export function fetchCrossDataset({ antibody, groupBy, topN }) {
+export function fetchCrossDataset({ antibody, groupBy, filters, topN }) {
   return request('/chart/cross-dataset', {
     method: 'POST',
     body: JSON.stringify({
       antibody,
       group_by: groupBy || 'organ_system',
+      filters: filters || {},
       top_n: topN || 15,
     }),
   });
 }
 
-export function fetchTargetAggregation({ table, target, groupBy, topN }) {
+export function fetchTargetAggregation({ table, target, groupBy, filters, topN }) {
   return request('/chart/target-aggregation', {
     method: 'POST',
     body: JSON.stringify({
       table,
       target,
       group_by: groupBy || 'organ_system',
+      filters: filters || {},
       top_n: topN || 15,
     }),
   });

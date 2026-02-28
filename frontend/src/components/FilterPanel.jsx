@@ -23,7 +23,8 @@ const selectStyles = {
   multiValueLabel: (base) => ({ ...base, color: '#4338ca', fontSize: '0.75rem', fontWeight: 500 }),
   multiValueRemove: (base) => ({ ...base, color: '#6366f1', '&:hover': { backgroundColor: '#c7d2fe', color: '#4338ca' } }),
   placeholder: (base) => ({ ...base, color: '#94a3b8', fontSize: '0.8125rem' }),
-  menu: (base) => ({ ...base, zIndex: 40, borderRadius: '0.75rem', overflow: 'hidden', boxShadow: '0 10px 40px -10px rgba(0,0,0,0.12)', border: '1px solid #e2e8f0' }),
+  menu: (base) => ({ ...base, zIndex: 9999, borderRadius: '0.75rem', overflow: 'hidden', boxShadow: '0 10px 40px -10px rgba(0,0,0,0.12)', border: '1px solid #e2e8f0' }),
+  menuPortal: (base) => ({ ...base, zIndex: 9999 }),
   option: (base, state) => ({
     ...base,
     fontSize: '0.8125rem',
@@ -68,6 +69,8 @@ function FilterSelect({ label, column, icon }) {
         styles={selectStyles}
         placeholder={`All ${label.toLowerCase()}...`}
         maxMenuHeight={200}
+        menuPlacement="auto"
+        menuPortalTarget={document.body}
       />
     </div>
   );

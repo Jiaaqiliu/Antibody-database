@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Select from 'react-select';
 import Plot from 'react-plotly.js';
 import { fetchCrossDataset, fetchOverlappingAntibodies } from '../api';
+import { useFilter } from '../context/FilterContext';
 
 const miniSelectStyles = {
   control: (base, state) => ({
@@ -15,12 +16,14 @@ const miniSelectStyles = {
     '&:hover': { borderColor: '#c7d2fe' },
   }),
   placeholder: (base) => ({ ...base, color: '#94a3b8', fontSize: '0.8125rem' }),
-  menu: (base) => ({ ...base, zIndex: 40, borderRadius: '0.75rem', boxShadow: '0 10px 40px -10px rgba(0,0,0,0.12)', border: '1px solid #e2e8f0' }),
+  menu: (base) => ({ ...base, zIndex: 9999, borderRadius: '0.75rem', boxShadow: '0 10px 40px -10px rgba(0,0,0,0.12)', border: '1px solid #e2e8f0' }),
+  menuPortal: (base) => ({ ...base, zIndex: 9999 }),
   option: (base, state) => ({ ...base, fontSize: '0.8125rem', backgroundColor: state.isFocused ? '#eef2ff' : 'transparent', color: state.isFocused ? '#4338ca' : '#475569' }),
   indicatorSeparator: () => ({ display: 'none' }),
 };
 
 export default function CrossDatasetChart() {
+  const { filters } = useFilter();
   const [antibodies, setAntibodies] = useState([]);
   const [selectedAntibody, setSelectedAntibody] = useState(null);
   const [groupBy, setGroupBy] = useState('organ_system');
@@ -37,7 +40,7 @@ export default function CrossDatasetChart() {
     if (!selectedAntibody) return;
     setLoading(true);
     try {
-      setData(await fetchCrossDataset({ antibody: selectedAntibody.value, groupBy }));
+      setData(await fetchCrossDataset({ antibody: selectedAntibody.value, groupBy, filters }));
     } catch {
       setData(null);
     }
@@ -71,6 +74,8 @@ export default function CrossDatasetChart() {
               placeholder="Select antibody..."
               styles={miniSelectStyles}
               maxMenuHeight={200}
+              menuPlacement="auto"
+              menuPortalTarget={document.body}
             />
           </div>
           <div>
