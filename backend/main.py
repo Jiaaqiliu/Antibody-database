@@ -13,6 +13,7 @@ from pydantic import BaseModel
 DB_PATH = os.path.join(os.path.dirname(__file__), "mab_database.sqlite")
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 VALID_TABLES = ["ctgov_all", "label_final", "label_bbw", "label_wap", "fc_mutations"]
+VALID_SEVERITY_MODES = ["all", "serious_or_grade3_plus", "other"]
 
 FILTERABLE_COLUMNS = {
     "ctgov": [
@@ -94,7 +95,7 @@ class AEChartRequest(BaseModel):
     filters: dict = {}
     search: Optional[str] = None
     top_n: int = 25
-    grade_col: str = "all_grades%"
+    severity_mode: str = "all"
 
 
 class ComparativeRequest(BaseModel):
@@ -103,6 +104,7 @@ class ComparativeRequest(BaseModel):
     nct_id: Optional[str] = None
     group_by: str = "organ_system"
     filters: dict = {}
+    severity_mode: str = "serious_or_grade3_plus"
     top_n: int = 15
 
 
@@ -110,6 +112,7 @@ class CrossDatasetRequest(BaseModel):
     antibody: str
     group_by: str = "organ_system"
     filters: dict = {}
+    severity_mode: str = "all"
     top_n: int = 15
 
 
@@ -118,7 +121,33 @@ class TargetAggregationRequest(BaseModel):
     target: str
     group_by: str = "organ_system"
     filters: dict = {}
+    severity_mode: str = "all"
     top_n: int = 15
+
+
+def normalize_severity_mode(mode: str) -> str:
+    return mode if mode in VALID_SEVERITY_MODES else "all"
+
+
+def label_percentage_expr(mode: str, comparator: bool = False) -> str:
+    prefix = "comp_" if comparator else ""
+    all_col = quote_col(f"{prefix}all_grades%")
+    grade_34_col = quote_col(f"{prefix}grade_3_4%")
+    grade_5_col = quote_col(f"{prefix}grade_5%")
+
+    if mode == "serious_or_grade3_plus":
+        return (
+            f'COALESCE(CAST({grade_34_col} AS REAL), 0) + '
+            f'COALESCE(CAST({grade_5_col} AS REAL), 0)'
+        )
+    if mode == "other":
+        return (
+            f'CASE WHEN {all_col} IS NULL THEN NULL ELSE '
+            f'MAX(COALESCE(CAST({all_col} AS REAL), 0) - '
+            f'COALESCE(CAST({grade_34_col} AS REAL), 0) - '
+            f'COALESCE(CAST({grade_5_col} AS REAL), 0), 0) END'
+        )
+    return f'CAST({all_col} AS REAL)'
 
 
 def calc_relative_risk(ab_events, ab_n, comp_events, comp_n):
@@ -230,9 +259,13 @@ def chart_adverse_events(req: AEChartRequest):
     where, params = build_where(req.table, req.filters, req.search)
     tt = table_type(req.table)
     gcol = quote_col(req.group_by)
+    severity_mode = normalize_severity_mode(req.severity_mode)
 
     if tt == "ctgov":
         base_where = where if where else " WHERE 1=1"
+        if severity_mode == "serious_or_grade3_plus":
+            base_where += f' AND {quote_col("event_type")} = ?'
+            params = params + ["serious"]
         sql = f'''
             SELECT {gcol} as category,
                    AVG(CAST(events_ab AS REAL) * 100.0 / CAST(n_ab AS REAL)) as avg_pct,
@@ -248,15 +281,12 @@ def chart_adverse_events(req: AEChartRequest):
         counts = [r["record_count"] for r in rows]
     else:
         base_where = where if where else " WHERE 1=1"
-        # Validate grade column to prevent SQL injection
-        valid_grade_cols = ["all_grades%", "grade_3_4%", "grade_5%"]
-        grade_col = req.grade_col if req.grade_col in valid_grade_cols else "all_grades%"
-        pct_col = quote_col(grade_col)
+        pct_expr = label_percentage_expr(severity_mode)
         sql = f'''
             SELECT {gcol} as category,
-                   AVG(CAST({pct_col} AS REAL)) as avg_pct,
+                   AVG({pct_expr}) as avg_pct,
                    COUNT(*) as cnt
-            FROM {req.table}{base_where} AND {gcol} IS NOT NULL AND {pct_col} IS NOT NULL
+            FROM {req.table}{base_where} AND {gcol} IS NOT NULL AND {quote_col("all_grades%")} IS NOT NULL
             GROUP BY {gcol}
             ORDER BY avg_pct DESC
             LIMIT ?
@@ -276,6 +306,7 @@ def chart_comparative(req: ComparativeRequest):
     conn = get_conn()
     tt = table_type(req.table)
     gcol = quote_col(req.group_by)
+    severity_mode = normalize_severity_mode(req.severity_mode)
 
     # Build filter conditions
     filter_clauses = []
@@ -293,6 +324,12 @@ def chart_comparative(req: ComparativeRequest):
             where_parts.append(f'{quote_col("nct_id")} = ?')
             params.append(req.nct_id)
         where_parts.append("n_ab IS NOT NULL AND n_ab > 0")
+        if severity_mode == "serious_or_grade3_plus":
+            where_parts.append(f'{quote_col("event_type")} = ?')
+            params.append("serious")
+        elif severity_mode == "other":
+            where_parts.append(f'{quote_col("event_type")} = ?')
+            params.append("other")
         where_parts.extend(filter_clauses)
         params.extend(filter_params)
         where = " WHERE " + " AND ".join(where_parts)
@@ -315,8 +352,8 @@ def chart_comparative(req: ComparativeRequest):
         ab_proportions = [round(r["ab_pct"], 2) if r["ab_pct"] else 0 for r in rows]
         comp_proportions = [round(r["comp_pct"], 2) if r["comp_pct"] else 0 for r in rows]
     else:
-        pct_col = quote_col("all_grades%")
-        comp_pct_col = quote_col("comp_all_grades%")
+        pct_expr = label_percentage_expr(severity_mode)
+        comp_pct_expr = label_percentage_expr(severity_mode, comparator=True)
         where_parts = [f'{quote_col("antibody")} = ?', f'{gcol} IS NOT NULL']
         params = [req.antibody]
         where_parts.extend(filter_clauses)
@@ -325,9 +362,10 @@ def chart_comparative(req: ComparativeRequest):
 
         sql = f'''
             SELECT {gcol} as category,
-                   AVG(CAST({pct_col} AS REAL)) as ab_pct,
-                   AVG(CAST({comp_pct_col} AS REAL)) as comp_pct
+                   AVG({pct_expr}) as ab_pct,
+                   AVG({comp_pct_expr}) as comp_pct
             FROM {req.table}{where}
+            AND {quote_col("all_grades%")} IS NOT NULL
             GROUP BY {gcol}
             ORDER BY ab_pct DESC
             LIMIT ?
@@ -373,6 +411,7 @@ def chart_comparative(req: ComparativeRequest):
 def chart_cross_dataset(req: CrossDatasetRequest):
     conn = get_conn()
     gcol = quote_col(req.group_by)
+    severity_mode = normalize_severity_mode(req.severity_mode)
     
     # Build filter conditions
     filter_clauses = []
@@ -395,15 +434,22 @@ def chart_cross_dataset(req: CrossDatasetRequest):
               AND events_ab IS NOT NULL AND n_ab IS NOT NULL AND n_ab > 0{filter_sql}
         GROUP BY {gcol}
     '''
-    ctgov_rows = conn.execute(ctgov_sql, [req.antibody] + filter_params).fetchall()
+    ctgov_params = [req.antibody] + filter_params
+    if severity_mode == "serious_or_grade3_plus":
+        ctgov_sql = ctgov_sql.replace(
+            f'AND events_ab IS NOT NULL AND n_ab IS NOT NULL AND n_ab > 0{filter_sql}',
+            f'AND {quote_col("event_type")} = ? AND events_ab IS NOT NULL AND n_ab IS NOT NULL AND n_ab > 0{filter_sql}'
+        )
+        ctgov_params = [req.antibody, "serious"] + filter_params
+    ctgov_rows = conn.execute(ctgov_sql, ctgov_params).fetchall()
     ctgov_data = {r["category"]: round(r["avg_pct"], 2) if r["avg_pct"] else 0 for r in ctgov_rows}
     
-    pct_col = quote_col("all_grades%")
+    pct_expr = label_percentage_expr(severity_mode)
     label_sql = f'''
         SELECT {gcol} as category,
-               AVG(CAST({pct_col} AS REAL)) as avg_pct
+               AVG({pct_expr}) as avg_pct
         FROM label_final
-        WHERE LOWER({quote_col("antibody")}) = LOWER(?) AND {gcol} IS NOT NULL AND {pct_col} IS NOT NULL{filter_sql}
+        WHERE LOWER({quote_col("antibody")}) = LOWER(?) AND {gcol} IS NOT NULL AND {quote_col("all_grades%")} IS NOT NULL{filter_sql}
         GROUP BY {gcol}
     '''
     label_rows = conn.execute(label_sql, [req.antibody] + filter_params).fetchall()
@@ -431,6 +477,7 @@ def chart_target_aggregation(req: TargetAggregationRequest):
     conn = get_conn()
     tt = table_type(req.table)
     gcol = quote_col(req.group_by)
+    severity_mode = normalize_severity_mode(req.severity_mode)
     
     # Build filter conditions
     filter_clauses = []
@@ -446,16 +493,21 @@ def chart_target_aggregation(req: TargetAggregationRequest):
         filter_sql = " AND " + " AND ".join(filter_clauses)
     
     if tt == "ctgov":
+        severity_filter = ""
+        severity_params = []
+        if severity_mode == "serious_or_grade3_plus":
+            severity_filter = f' AND {quote_col("event_type")} = ?'
+            severity_params.append("serious")
         sql = f'''
             SELECT {gcol} as category,
                    antibody,
                    AVG(CAST(events_ab AS REAL) * 100.0 / CAST(n_ab AS REAL)) as avg_pct
             FROM {req.table}
             WHERE {quote_col("target_1")} = ? AND {gcol} IS NOT NULL 
-                  AND events_ab IS NOT NULL AND n_ab IS NOT NULL AND n_ab > 0{filter_sql}
+                  AND events_ab IS NOT NULL AND n_ab IS NOT NULL AND n_ab > 0{severity_filter}{filter_sql}
             GROUP BY {gcol}, antibody
         '''
-        rows = conn.execute(sql, [req.target] + filter_params).fetchall()
+        rows = conn.execute(sql, [req.target] + severity_params + filter_params).fetchall()
         
         category_stats = {}
         antibody_data = {}
@@ -469,13 +521,13 @@ def chart_target_aggregation(req: TargetAggregationRequest):
             category_stats[cat].append(pct)
             antibody_data[cat].append({"antibody": ab, "proportion": pct})
     else:
-        pct_col = quote_col("all_grades%")
+        pct_expr = label_percentage_expr(severity_mode)
         sql = f'''
             SELECT {gcol} as category,
                    antibody,
-                   AVG(CAST({pct_col} AS REAL)) as avg_pct
+                   AVG({pct_expr}) as avg_pct
             FROM {req.table}
-            WHERE {quote_col("target_1")} = ? AND {gcol} IS NOT NULL AND {pct_col} IS NOT NULL{filter_sql}
+            WHERE {quote_col("target_1")} = ? AND {gcol} IS NOT NULL AND {quote_col("all_grades%")} IS NOT NULL{filter_sql}
             GROUP BY {gcol}, antibody
         '''
         rows = conn.execute(sql, [req.target] + filter_params).fetchall()

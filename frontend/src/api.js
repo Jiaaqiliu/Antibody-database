@@ -39,7 +39,7 @@ export function fetchDistribution(table, column, filters, search) {
   return request(`/chart/distribution?${params}`);
 }
 
-export function fetchAdverseEvents({ table, groupBy, filters, search, topN, gradeCol }) {
+export function fetchAdverseEvents({ table, groupBy, filters, search, topN, severityMode }) {
   return request('/chart/adverse-events', {
     method: 'POST',
     body: JSON.stringify({
@@ -48,12 +48,12 @@ export function fetchAdverseEvents({ table, groupBy, filters, search, topN, grad
       filters: filters || {},
       search: search || null,
       top_n: topN || 25,
-      grade_col: gradeCol || 'all_grades%',
+      severity_mode: severityMode || 'all',
     }),
   });
 }
 
-export function fetchComparative({ table, antibody, nctId, groupBy, filters, topN }) {
+export function fetchComparative({ table, antibody, nctId, groupBy, filters, severityMode, topN }) {
   return request('/chart/comparative', {
     method: 'POST',
     body: JSON.stringify({
@@ -62,6 +62,7 @@ export function fetchComparative({ table, antibody, nctId, groupBy, filters, top
       nct_id: nctId || null,
       group_by: groupBy || 'organ_system',
       filters: filters || {},
+      severity_mode: severityMode || 'serious_or_grade3_plus',
       top_n: topN || 15,
     }),
   });
@@ -78,19 +79,20 @@ export function getExportUrl(table, filters, search) {
   return `${BASE}/export?${params}`;
 }
 
-export function fetchCrossDataset({ antibody, groupBy, filters, topN }) {
+export function fetchCrossDataset({ antibody, groupBy, filters, severityMode, topN }) {
   return request('/chart/cross-dataset', {
     method: 'POST',
     body: JSON.stringify({
       antibody,
       group_by: groupBy || 'organ_system',
       filters: filters || {},
+      severity_mode: severityMode || 'all',
       top_n: topN || 15,
     }),
   });
 }
 
-export function fetchTargetAggregation({ table, target, groupBy, filters, topN }) {
+export function fetchTargetAggregation({ table, target, groupBy, filters, severityMode, topN }) {
   return request('/chart/target-aggregation', {
     method: 'POST',
     body: JSON.stringify({
@@ -98,6 +100,7 @@ export function fetchTargetAggregation({ table, target, groupBy, filters, topN }
       target,
       group_by: groupBy || 'organ_system',
       filters: filters || {},
+      severity_mode: severityMode || 'all',
       top_n: topN || 15,
     }),
   });

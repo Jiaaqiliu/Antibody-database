@@ -6,9 +6,6 @@ const FilterContext = createContext(null);
 const TABLE_LABELS = {
   ctgov_all: 'CTGOV – All Events',
   label_final: 'FDA Label – Final',
-  label_bbw: 'FDA Label – BBW',
-  label_wap: 'FDA Label – WAP',
-  fc_mutations: 'Fc Antibody Mutations',
 };
 
 const DISTRIBUTION_CHARTS = [
@@ -22,6 +19,7 @@ const initialState = {
   table: 'ctgov_all',
   filters: {},
   search: '',
+  severityMode: 'all',
   filterOptions: {},
   results: { data: [], total: 0, page: 1, page_size: 50 },
   distributions: [{}, {}, {}, {}],
@@ -35,9 +33,10 @@ const initialState = {
 
 function reducer(state, action) {
   switch (action.type) {
-    case 'SET_TABLE': return { ...state, table: action.payload, filters: {}, search: '', results: initialState.results, distributions: initialState.distributions, aeData: initialState.aeData };
+    case 'SET_TABLE': return { ...state, table: action.payload, filters: {}, search: '', severityMode: 'all', results: initialState.results, distributions: initialState.distributions, aeData: initialState.aeData };
     case 'SET_FILTERS': return { ...state, filters: action.payload };
     case 'SET_SEARCH': return { ...state, search: action.payload };
+    case 'SET_SEVERITY_MODE': return { ...state, severityMode: action.payload };
     case 'SET_FILTER_OPTIONS': return { ...state, filterOptions: action.payload, optionsLoading: false };
     case 'SET_RESULTS': return { ...state, results: action.payload, loading: false };
     case 'SET_DISTRIBUTIONS': return { ...state, distributions: action.payload };
@@ -75,13 +74,13 @@ export function FilterProvider({ children }) {
       dispatch({ type: 'SET_DISTRIBUTIONS', payload: dists });
       dispatch({ type: 'SET_SORT', payload: { sortBy, sortDir } });
 
-      fetchAdverseEvents({ table: state.table, groupBy: 'organ_system', filters: state.filters, search: state.search })
-        .then(ae => dispatch({ type: 'SET_AE_DATA', payload: ae }))
-        .catch(() => {});
+        fetchAdverseEvents({ table: state.table, groupBy: 'organ_system', filters: state.filters, search: state.search, severityMode: state.severityMode })
+          .then(ae => dispatch({ type: 'SET_AE_DATA', payload: ae }))
+          .catch(() => {});
     } catch (e) {
       dispatch({ type: 'SET_ERROR', payload: e.message });
     }
-  }, [state.table, state.filters, state.search, state.sortBy, state.sortDir]);
+  }, [state.table, state.filters, state.search, state.severityMode, state.sortBy, state.sortDir]);
 
   const value = {
     ...state,
@@ -93,6 +92,7 @@ export function FilterProvider({ children }) {
     setTable: (t) => dispatch({ type: 'SET_TABLE', payload: t }),
     setFilters: (f) => dispatch({ type: 'SET_FILTERS', payload: f }),
     setSearch: (s) => dispatch({ type: 'SET_SEARCH', payload: s }),
+    setSeverityMode: (mode) => dispatch({ type: 'SET_SEVERITY_MODE', payload: mode }),
     clearFilters: () => dispatch({ type: 'CLEAR_FILTERS' }),
     isCtgov: state.table.startsWith('ctgov'),
   };
