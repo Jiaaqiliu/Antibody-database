@@ -28,6 +28,7 @@ export default function ComparativeChart() {
   const [nctId, setNctId] = useState(null);
   const [studies, setStudies] = useState([]);
   const [groupBy, setGroupBy] = useState('organ_system');
+  const [comparisonMode, setComparisonMode] = useState('serious_or_grade3_plus');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [antibodyOptions, setAntibodyOptions] = useState([]);
@@ -47,11 +48,20 @@ export default function ComparativeChart() {
     }).catch(() => setStudies([]));
   }, [antibody, table, isCtgov]);
 
+  useEffect(() => {
+    if (!antibody) return;
+    setLoading(true);
+    fetchComparative({ table, antibody: antibody.value, nctId: nctId?.value, groupBy, filters, severityMode: comparisonMode })
+      .then(setData)
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  }, [comparisonMode]);
+
   async function loadComparative() {
     if (!antibody) return;
     setLoading(true);
     try {
-      setData(await fetchComparative({ table, antibody: antibody.value, nctId: nctId?.value, groupBy, filters }));
+      setData(await fetchComparative({ table, antibody: antibody.value, nctId: nctId?.value, groupBy, filters, severityMode: comparisonMode }));
     } catch {
       setData(null);
     }
@@ -70,6 +80,30 @@ export default function ComparativeChart() {
           <div>
             <h3 className="text-sm font-bold text-slate-700">Comparative Arm Analysis</h3>
             <p className="text-[10px] text-slate-400">Treatment vs Comparator arm comparison</p>
+          </div>
+        </div>
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="inline-flex items-center rounded-xl border border-slate-200/80 bg-slate-50/80 px-3 py-2 text-xs text-slate-500">
+            Comparing <span className="mx-1 font-semibold text-slate-700">{comparisonMode === 'other' ? 'other events' : (isCtgov ? 'serious events' : 'grade 3+')}</span> between treatment and comparator arms
+          </div>
+          <div className="flex bg-slate-100/80 rounded-xl p-1 gap-0.5">
+            {[
+              ['serious_or_grade3_plus', isCtgov ? 'Serious' : 'Grade 3+'],
+              ['other', 'Other'],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setComparisonMode(key)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                  comparisonMode === key
+                    ? 'bg-white text-emerald-700 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">

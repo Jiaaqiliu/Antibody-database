@@ -23,7 +23,7 @@ const miniSelectStyles = {
 };
 
 export default function TargetAggregationChart() {
-  const { table, filters } = useFilter();
+  const { table, filters, severityMode, isCtgov } = useFilter();
   const [targets, setTargets] = useState([]);
   const [selectedTarget, setSelectedTarget] = useState(null);
   const [groupBy, setGroupBy] = useState('organ_system');
@@ -38,11 +38,20 @@ export default function TargetAggregationChart() {
     setData(null);
   }, [table]);
 
+  useEffect(() => {
+    if (!selectedTarget) return;
+    setLoading(true);
+    fetchTargetAggregation({ table, target: selectedTarget.value, groupBy, filters, severityMode })
+      .then(setData)
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  }, [severityMode]);
+
   async function loadAggregation() {
     if (!selectedTarget) return;
     setLoading(true);
     try {
-      setData(await fetchTargetAggregation({ table, target: selectedTarget.value, groupBy, filters }));
+      setData(await fetchTargetAggregation({ table, target: selectedTarget.value, groupBy, filters, severityMode }));
     } catch {
       setData(null);
     }
@@ -62,6 +71,9 @@ export default function TargetAggregationChart() {
             <h3 className="text-sm font-bold text-slate-700">Target Aggregation Analysis</h3>
             <p className="text-[10px] text-slate-400">View AE distribution across all antibodies for a target</p>
           </div>
+        </div>
+        <div className="mb-4 inline-flex items-center rounded-xl border border-slate-200/80 bg-slate-50/80 px-3 py-2 text-xs text-slate-500">
+          Showing <span className="mx-1 font-semibold text-slate-700">{severityMode === 'all' ? (isCtgov ? 'all events' : 'all grades') : (isCtgov ? 'serious events' : 'grade 3+')}</span> for the selected target
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div className="md:col-span-2">

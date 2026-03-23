@@ -23,7 +23,7 @@ const miniSelectStyles = {
 };
 
 export default function CrossDatasetChart() {
-  const { filters } = useFilter();
+  const { filters, severityMode } = useFilter();
   const [antibodies, setAntibodies] = useState([]);
   const [selectedAntibody, setSelectedAntibody] = useState(null);
   const [groupBy, setGroupBy] = useState('organ_system');
@@ -36,11 +36,20 @@ export default function CrossDatasetChart() {
     }).catch(() => setAntibodies([]));
   }, []);
 
+  useEffect(() => {
+    if (!selectedAntibody) return;
+    setLoading(true);
+    fetchCrossDataset({ antibody: selectedAntibody.value, groupBy, filters, severityMode })
+      .then(setData)
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  }, [severityMode]);
+
   async function loadComparison() {
     if (!selectedAntibody) return;
     setLoading(true);
     try {
-      setData(await fetchCrossDataset({ antibody: selectedAntibody.value, groupBy, filters }));
+      setData(await fetchCrossDataset({ antibody: selectedAntibody.value, groupBy, filters, severityMode }));
     } catch {
       setData(null);
     }
@@ -60,6 +69,9 @@ export default function CrossDatasetChart() {
             <h3 className="text-sm font-bold text-slate-700">Cross-Dataset Comparison</h3>
             <p className="text-[10px] text-slate-400">Compare CTGOV vs FDA Label for the same antibody</p>
           </div>
+        </div>
+        <div className="mb-4 inline-flex items-center rounded-xl border border-slate-200/80 bg-slate-50/80 px-3 py-2 text-xs text-slate-500">
+          Comparing <span className="mx-1 font-semibold text-slate-700">{severityMode === 'all' ? 'all events / all grades' : 'serious events / grade 3+'}</span> across datasets
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div className="md:col-span-2">

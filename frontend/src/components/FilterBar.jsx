@@ -1,12 +1,16 @@
 import { useFilter } from '../context/FilterContext';
 
 export default function FilterBar() {
-  const { filters, search, applyFilters, clearFilters, loading, results } = useFilter();
+  const { filters, search, applyFilters, clearFilters, loading, results, severityMode, setSeverityMode, isCtgov } = useFilter();
   const activeCount = Object.values(filters).filter(v => v && v.length > 0).length + (search ? 1 : 0);
 
+  function handleSeverityChange(mode) {
+    setSeverityMode(mode);
+  }
+
   return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-3">
+    <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           onClick={() => applyFilters(1)}
           disabled={loading}
@@ -31,6 +35,31 @@ export default function FilterBar() {
             <span className="text-xs font-semibold text-indigo-600">{activeCount} active</span>
           </div>
         )}
+        <div className="flex items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/75 px-2 py-2 shadow-sm shadow-slate-200/40">
+          <div className="px-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">AE Mode</p>
+            <p className="text-xs text-slate-500">{isCtgov ? 'CTGOV: all events vs serious' : 'FDA: all grades vs grade 3+'}</p>
+          </div>
+          <div className="flex rounded-xl bg-slate-100/90 p-1 gap-1">
+            {[
+              ['all', isCtgov ? 'All Events' : 'All Grades'],
+              ['serious_or_grade3_plus', isCtgov ? 'Serious' : 'Grade 3+'],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => handleSeverityChange(key)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-200 ${
+                  severityMode === key
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
       {results.total > 0 && (
         <div className="text-sm text-slate-500 font-medium">

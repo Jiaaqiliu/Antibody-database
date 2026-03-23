@@ -4,31 +4,26 @@ import { fetchAdverseEvents } from '../api';
 import { useFilter } from '../context/FilterContext';
 
 export default function AdverseEventChart() {
-  const { table, filters, search, aeData, isCtgov } = useFilter();
+  const { table, filters, search, aeData, isCtgov, severityMode } = useFilter();
   const [groupBy, setGroupBy] = useState('organ_system');
-  const [gradeCol, setGradeCol] = useState('all_grades%');
   const [localData, setLocalData] = useState(aeData);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => { setLocalData(aeData); }, [aeData]);
 
+  useEffect(() => {
+    setLoading(true);
+    fetchAdverseEvents({ table, groupBy, filters, search, severityMode })
+      .then(setLocalData)
+      .catch(() => setLocalData({ categories: [], proportions: [], counts: [] }))
+      .finally(() => setLoading(false));
+  }, [severityMode]);
+
   async function handleToggle(newGroup) {
     setGroupBy(newGroup);
     setLoading(true);
     try {
-      const data = await fetchAdverseEvents({ table, groupBy: newGroup, filters, search, gradeCol: isCtgov ? undefined : gradeCol });
-      setLocalData(data);
-    } catch {
-      setLocalData({ categories: [], proportions: [], counts: [] });
-    }
-    setLoading(false);
-  }
-
-  async function handleGradeChange(newGrade) {
-    setGradeCol(newGrade);
-    setLoading(true);
-    try {
-      const data = await fetchAdverseEvents({ table, groupBy, filters, search, gradeCol: newGrade });
+      const data = await fetchAdverseEvents({ table, groupBy: newGroup, filters, search, severityMode });
       setLocalData(data);
     } catch {
       setLocalData({ categories: [], proportions: [], counts: [] });
@@ -48,23 +43,9 @@ export default function AdverseEventChart() {
           <h3 className="text-sm font-bold text-slate-700">Adverse Event Proportions</h3>
         </div>
         <div className="flex items-center gap-3">
-          {!isCtgov && (
-            <div className="flex bg-amber-50 rounded-xl p-1 gap-0.5 border border-amber-200/50">
-              {[['all_grades%', 'All Grades'], ['grade_3_4%', 'Grade 3-4'], ['grade_5%', 'Grade 5']].map(([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => handleGradeChange(key)}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 ${
-                    gradeCol === key
-                      ? 'bg-white text-amber-600 shadow-sm'
-                      : 'text-amber-600/70 hover:text-amber-700'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="rounded-xl border border-slate-200/80 bg-slate-50/80 px-3 py-2 text-xs text-slate-500">
+            Showing <span className="font-semibold text-slate-700">{severityMode === 'all' ? (isCtgov ? 'all events' : 'all grades') : (isCtgov ? 'serious events' : 'grade 3+')}</span>
+          </div>
           <div className="flex bg-slate-100/80 rounded-xl p-1 gap-0.5">
             {[['organ_system', 'Organ System'], ['adverse_event_term', 'AE Term']].map(([key, label]) => (
               <button
