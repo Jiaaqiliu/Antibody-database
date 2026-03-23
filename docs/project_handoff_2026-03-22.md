@@ -216,7 +216,7 @@ Completed.
 Validation performed:
 
 - LSP diagnostics on changed backend and frontend files: clean
-- backend syntax check via `python -m py_compile main.py`: passed
+- backend syntax check via `python -m py_compile ingest.py main.py`: passed
 - frontend production build via `npm run build`: passed
 - backend smoke tests executed against real local DB for:
   - CT.gov AE all / severe
@@ -228,13 +228,37 @@ Validation performed:
 
 All smoke checks returned successful payloads.
 
+### 5.5 Integrated the new FDA workbook into runtime ingestion
+
+Completed.
+
+Changes:
+
+- `backend/ingest.py`
+  - added `FDA_FIXED_PATH`
+  - `label_final` now loads from `data/fda_fixed.xlsx` when present
+  - `label_bbw` and `label_wap` are now derived from the same FDA fixed workbook using the `bbw` and `wap` flags
+  - CT.gov and FC mutation sources remain on the original multi-sheet workbook
+- `backend/table_meta.json`
+  - regenerated after re-ingestion
+- `backend/mab_database.sqlite`
+  - rebuilt from the updated ingestion flow
+
+Result:
+
+- the active local runtime database now reflects the new FDA workbook
+- `label_final` has 58 columns from `fda_fixed.xlsx`
+- `label_bbw` and `label_wap` are aligned to the same FDA source
+
 ---
 
 ## 6. Files Changed In This Session
 
 ### Backend
 
+- `backend/ingest.py`
 - `backend/main.py`
+- `backend/table_meta.json`
 
 ### Frontend
 
@@ -249,9 +273,13 @@ All smoke checks returned successful payloads.
 - `frontend/src/context/FilterContext.jsx`
 - `frontend/src/components/FutureContentPage.jsx` (new)
 
-### Data / reference files present but not yet integrated in runtime
+### Data / reference files added or updated
 
 - `data/fda_fixed.xlsx`
+
+### Documentation
+
+- `docs/project_handoff_2026-03-22.md` (new)
 
 ---
 
@@ -263,15 +291,15 @@ All smoke checks returned successful payloads.
 - FC mutation and target feature sections have visible future landing pages
 - AE severity handling now better matches the latest meeting intent
 - comparative analysis can explicitly compare severe vs other categories
+- the local runtime database now ingests FDA data from `data/fda_fixed.xlsx`
 - code builds and backend queries execute successfully
 
 ### 7.2 What remains open
 
-1. The new file `data/fda_fixed.xlsx` is present but not yet wired into `backend/ingest.py` or the live DB refresh flow.
-2. No new CT.gov dataset was provided in this session, so CT.gov data ingestion was not changed.
-3. Ian's promised code/spec for BBW and WAP plots was not provided here, so that downstream visualization work is still blocked.
-4. The new FC mutation and target feature pages are placeholders only; no real content modules have been implemented there yet.
-5. No browser-based end-to-end QA was run in this session; verification was code/build/query level.
+1. No new CT.gov dataset was provided in this session, so CT.gov ingestion still uses the existing workbook.
+2. Ian's promised code/spec for BBW and WAP plots was not provided here, so that downstream visualization work is still blocked.
+3. The new FC mutation and target feature pages are placeholders only; no real content modules have been implemented there yet.
+4. No browser-based end-to-end QA was run in this session; verification was code/build/query level.
 
 ---
 
@@ -299,9 +327,9 @@ This is the most defensible interpretation from the meeting text and current dat
 
 This assumes the provided grade columns partition the event space the way the team expects. If Ian defines `grade 3+` differently, this calculation may need adjustment.
 
-### 8.3 Unused provided file
+### 8.3 CT.gov source mismatch risk
 
-`data/fda_fixed.xlsx` exists but is not yet integrated. If the team expects the website to already reflect that new FDA file, ingestion needs to be updated and the SQLite DB regenerated.
+The FDA side has now been refreshed from `data/fda_fixed.xlsx`, but CT.gov still comes from the older multi-sheet workbook. If Ian intended both sides to be refreshed together, the current cross-dataset comparison may still mix a newer FDA source with an older CT.gov source.
 
 ---
 
@@ -310,7 +338,7 @@ This assumes the provided grade columns partition the event space the way the te
 ### 9.1 Highest priority
 
 1. Confirm with the user whether `data/fda_fixed.xlsx` should replace the current `label_final` ingestion source.
-2. If yes, update `backend/ingest.py` and rebuild `backend/mab_database.sqlite`.
+2. Confirm whether a matching updated CT.gov source is also available, so both sides of cross-dataset analysis stay synchronized.
 3. Ask whether BBW/WAP plots should be fully removed from product scope, or moved into future subpages once Ian's plotting code arrives.
 
 ### 9.2 Product follow-up
@@ -325,9 +353,7 @@ This assumes the provided grade columns partition the event space the way the te
 
 ### 9.3 If user asks for deployment-ready completion
 
-7. Commit current changes.
-8. Push branch.
-9. Verify Render deployment and smoke-test the live site.
+7. Verify Render deployment after push and smoke-test the live site.
 
 ---
 
@@ -362,11 +388,9 @@ with real values from the local SQLite database.
 
 At the time of writing this handoff:
 
-- working tree has uncommitted changes from this session
-- `data/fda_fixed.xlsx` is untracked
-- this handoff file is newly added and should also be committed if the user wants the documentation preserved in git
-
-No commit or push was performed in this session after the latest round of meeting-driven changes.
+- the latest website and data-integration changes have been committed locally in multiple focused commits
+- the handoff file itself is tracked in git for continuity
+- final remote push/deployment verification should be checked against the latest branch state
 
 ---
 
