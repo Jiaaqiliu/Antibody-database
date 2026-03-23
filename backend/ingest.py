@@ -9,8 +9,10 @@ import sqlite3
 import pandas as pd
 import os
 import json
+from typing import cast
 
 EXCEL_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "Full_mab_datasets_18Feb26 1.xlsx")
+FDA_FIXED_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "fda_fixed.xlsx")
 DB_PATH = os.path.join(os.path.dirname(__file__), "mab_database.sqlite")
 
 
@@ -38,15 +40,39 @@ def clean_df(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def ingest():
-    print(f"Reading Excel: {EXCEL_PATH}")
-    sheets = {
+def load_table_df(table_name: str) -> pd.DataFrame:
+    if table_name == "label_final" and os.path.exists(FDA_FIXED_PATH):
+        print(f"    Using FDA fixed workbook: {FDA_FIXED_PATH}")
+        df = pd.read_excel(FDA_FIXED_PATH, sheet_name="Sheet1", engine="openpyxl")
+        return clean_df(df)
+
+    if table_name in {"label_bbw", "label_wap"} and os.path.exists(FDA_FIXED_PATH):
+        print(f"    Deriving {table_name} from FDA fixed workbook: {FDA_FIXED_PATH}")
+        df = pd.read_excel(FDA_FIXED_PATH, sheet_name="Sheet1", engine="openpyxl")
+        df = clean_df(df)
+        flag_col = "bbw" if table_name == "label_bbw" else "wap"
+        if flag_col in df.columns:
+            flag_series = pd.to_numeric(df[flag_col], errors="coerce")
+            filtered_df = df[flag_series == 1].copy()
+            return cast(pd.DataFrame, filtered_df)
+
+    sheet_name = {
         "ctgov_all": "CTGOV_all",
         "label_final": "Label_Final",
         "label_bbw": "Label_BBW",
         "label_wap": "Label_WAP",
         "fc_mutations": "Fc Antibody mutations",
-    }
+    }[table_name]
+    df = pd.read_excel(EXCEL_PATH, sheet_name=sheet_name, engine="openpyxl")
+    return clean_df(df)
+
+
+def ingest():
+    print(f"Reading Excel: {EXCEL_PATH}")
+    if os.path.exists(FDA_FIXED_PATH):
+        print(f"Using supplemental FDA workbook: {FDA_FIXED_PATH}")
+
+    tables = ["ctgov_all", "label_final", "label_bbw", "label_wap", "fc_mutations"]
 
     if os.path.exists(DB_PATH):
         os.remove(DB_PATH)
@@ -55,10 +81,9 @@ def ingest():
 
     all_table_info = {}
 
-    for table_name, sheet_name in sheets.items():
-        print(f"  Loading sheet: {sheet_name} -> table: {table_name}")
-        df = pd.read_excel(EXCEL_PATH, sheet_name=sheet_name, engine="openpyxl")
-        df = clean_df(df)
+    for table_name in tables:
+        print(f"  Loading table: {table_name}")
+        df = load_table_df(table_name)
 
         # Drop formula columns (they show up as strings starting with '=')
         for idx, col in enumerate(df.columns):
