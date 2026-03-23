@@ -1,7 +1,13 @@
 import { useEffect } from 'react';
 import { useFilter } from '../context/FilterContext';
 
-export default function Header() {
+const NAV_ITEMS = [
+  { key: 'home', label: 'Dashboard' },
+  { key: 'fc-mutations', label: 'FC Mutation' },
+  { key: 'target-features', label: 'Target Features' },
+];
+
+export default function Header({ page = 'home', onNavigate = () => {} }) {
   const { table, setTable, loadFilterOptions, applyFilters, TABLE_LABELS } = useFilter();
 
   useEffect(() => {
@@ -13,16 +19,39 @@ export default function Header() {
     <header className="relative overflow-hidden bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(99,102,241,0.15),transparent_60%)]" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(168,85,247,0.1),transparent_60%)]" />
-      <div className="relative max-w-screen-2xl mx-auto px-8 py-6 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="relative max-w-screen-2xl mx-auto px-8 py-6 flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:gap-6">
           <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25">
             <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m5.231 13.481L15 17.25m-4.5-15H5.625c-.621 0-1.125.504-1.125 1.125v16.5c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9zm3.75 11.625a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
             </svg>
           </div>
-          <h1 className="text-xl font-bold text-white tracking-tight">Therapeutic Antibody Commons</h1>
+          <div className="space-y-1">
+            <h1 className="text-xl font-bold text-white tracking-tight">Therapeutic Antibody Commons</h1>
+            <p className="text-xs text-indigo-200/75 uppercase tracking-[0.28em]">Safety signal dashboard and future analysis hubs</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {NAV_ITEMS.map((item) => {
+              const isActive = page === item.key;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => onNavigate(item.key)}
+                  className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-all duration-200 ${
+                    isActive
+                      ? 'border-white/30 bg-white text-slate-900 shadow-lg shadow-slate-950/20'
+                      : 'border-white/15 bg-white/8 text-indigo-100 hover:bg-white/14'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <div className="flex items-center gap-3">
+        {page === 'home' && (
+        <div className="flex items-center gap-3 self-start xl:self-auto">
           <span className="text-xs font-medium text-indigo-300/70 uppercase tracking-widest">Dataset</span>
           <div className="relative">
             <select
@@ -39,6 +68,7 @@ export default function Header() {
             </svg>
           </div>
         </div>
+        )}
       </div>
     </header>
   );
