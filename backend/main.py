@@ -276,8 +276,9 @@ def chart_adverse_events(req: AEChartRequest):
             LIMIT ?
         '''
         rows = conn.execute(sql, params + [req.top_n]).fetchall()
+        rows = [r for r in rows if r["avg_pct"] and r["avg_pct"] > 0]
         categories = [r["category"] for r in rows]
-        proportions = [round(r["avg_pct"], 2) if r["avg_pct"] else 0 for r in rows]
+        proportions = [round(r["avg_pct"], 2) for r in rows]
         counts = [r["record_count"] for r in rows]
     else:
         base_where = where if where else " WHERE 1=1"
@@ -292,8 +293,9 @@ def chart_adverse_events(req: AEChartRequest):
             LIMIT ?
         '''
         rows = conn.execute(sql, params + [req.top_n]).fetchall()
+        rows = [r for r in rows if r["avg_pct"] and r["avg_pct"] > 0]
         categories = [r["category"] for r in rows]
-        proportions = [round(r["avg_pct"], 2) if r["avg_pct"] else 0 for r in rows]
+        proportions = [round(r["avg_pct"], 2) for r in rows]
         counts = [r["cnt"] for r in rows]
 
     conn.close()
@@ -348,6 +350,7 @@ def chart_comparative(req: ComparativeRequest):
             LIMIT ?
         '''
         rows = conn.execute(sql, params + [req.top_n]).fetchall()
+        rows = [r for r in rows if (r["ab_pct"] and r["ab_pct"] > 0) or (r["comp_pct"] and r["comp_pct"] > 0)]
         categories = [r["category"] for r in rows]
         ab_proportions = [round(r["ab_pct"], 2) if r["ab_pct"] else 0 for r in rows]
         comp_proportions = [round(r["comp_pct"], 2) if r["comp_pct"] else 0 for r in rows]
@@ -371,6 +374,7 @@ def chart_comparative(req: ComparativeRequest):
             LIMIT ?
         '''
         rows = conn.execute(sql, params + [req.top_n]).fetchall()
+        rows = [r for r in rows if (r["ab_pct"] and r["ab_pct"] > 0) or (r["comp_pct"] and r["comp_pct"] > 0)]
         categories = [r["category"] for r in rows]
         ab_proportions = [round(r["ab_pct"], 2) if r["ab_pct"] else 0 for r in rows]
         comp_proportions = [round(r["comp_pct"], 2) if r["comp_pct"] else 0 for r in rows]
@@ -456,7 +460,9 @@ def chart_cross_dataset(req: CrossDatasetRequest):
     label_data = {r["category"]: round(r["avg_pct"], 2) if r["avg_pct"] else 0 for r in label_rows}
     
     all_categories = sorted(set(ctgov_data.keys()) | set(label_data.keys()))
-    
+    # Filter out categories where both datasets have 0 or no data
+    all_categories = [c for c in all_categories if ctgov_data.get(c, 0) > 0 or label_data.get(c, 0) > 0]
+
     if req.top_n and len(all_categories) > req.top_n:
         category_max = [(c, max(ctgov_data.get(c, 0), label_data.get(c, 0))) for c in all_categories]
         category_max.sort(key=lambda x: x[1], reverse=True)
@@ -546,7 +552,7 @@ def chart_target_aggregation(req: TargetAggregationRequest):
     
     result = []
     for cat, values in category_stats.items():
-        if values:
+        if values and any(v > 0 for v in values):
             # Sort antibodies by proportion descending
             ab_list = sorted(antibody_data.get(cat, []), key=lambda x: x["proportion"], reverse=True)
             result.append({
