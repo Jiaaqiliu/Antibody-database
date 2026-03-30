@@ -2,7 +2,7 @@ import { useFilter } from '../context/FilterContext';
 import { getExportUrl } from '../api';
 
 const PRIORITY_COLS = [
-  'antibody', 'condition', 'organ_system', 'adverse_event_term', 
+  'antibody', 'condition', 'organ_system', 'soc_meddra', 'adverse_event_term', 'pt_name_meddra',
   'general_molecular_category', 'target_1', 'moa_new', 'record_category',
   'dose_mg', 'dose_mg_kg', 'frequency_days', 'median_duration_days',
   'duration', 'phase', 'n_ab', 'events_ab', 'n_comp', 'events_comp',

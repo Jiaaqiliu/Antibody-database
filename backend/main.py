@@ -26,7 +26,7 @@ FILTERABLE_COLUMNS = {
     "label": [
         "antibody", "general_molecular_category", "format_general_category",
         "isotype_fc", "record_category", "target_1", "condition",
-        "organ_system", "moa_new", "source", "bbw", "wap",
+        "soc_meddra", "moa_new", "source", "bbw", "wap",
     ],
     "fc_mutations": [
         "antibody", "heavy_chain", "gene", "species", "effect",
@@ -61,6 +61,17 @@ def table_type(table: str) -> str:
         return "fc_mutations"
     else:
         return "label"
+
+
+def map_group_col(group_by: str, tt: str) -> str:
+    """Map generic group_by names to table-specific column names.
+    For label tables, use MedDRA standard columns."""
+    if tt == "label":
+        if group_by == "organ_system":
+            return "soc_meddra"
+        if group_by == "adverse_event_term":
+            return "pt_name_meddra"
+    return group_by
 
 
 def build_where(table: str, filters: dict, search: Optional[str] = None):
@@ -258,7 +269,7 @@ def chart_adverse_events(req: AEChartRequest):
     conn = get_conn()
     where, params = build_where(req.table, req.filters, req.search)
     tt = table_type(req.table)
-    gcol = quote_col(req.group_by)
+    gcol = quote_col(map_group_col(req.group_by, tt))
     severity_mode = normalize_severity_mode(req.severity_mode)
 
     if tt == "ctgov":
@@ -307,7 +318,7 @@ def chart_comparative(req: ComparativeRequest):
     validate_table(req.table)
     conn = get_conn()
     tt = table_type(req.table)
-    gcol = quote_col(req.group_by)
+    gcol = quote_col(map_group_col(req.group_by, tt))
     severity_mode = normalize_severity_mode(req.severity_mode)
 
     # Build filter conditions
@@ -414,9 +425,10 @@ def chart_comparative(req: ComparativeRequest):
 @app.post("/api/chart/cross-dataset")
 def chart_cross_dataset(req: CrossDatasetRequest):
     conn = get_conn()
-    gcol = quote_col(req.group_by)
+    ctgov_gcol = quote_col(map_group_col(req.group_by, "ctgov"))
+    label_gcol = quote_col(map_group_col(req.group_by, "label"))
     severity_mode = normalize_severity_mode(req.severity_mode)
-    
+
     # Build filter conditions
     filter_clauses = []
     filter_params = []
@@ -425,18 +437,18 @@ def chart_cross_dataset(req: CrossDatasetRequest):
             placeholders = ",".join(["?"] * len(values))
             filter_clauses.append(f'{quote_col(col)} IN ({placeholders})')
             filter_params.extend(values)
-    
+
     filter_sql = ""
     if filter_clauses:
         filter_sql = " AND " + " AND ".join(filter_clauses)
-    
+
     ctgov_sql = f'''
-        SELECT {gcol} as category,
+        SELECT {ctgov_gcol} as category,
                AVG(CAST(events_ab AS REAL) * 100.0 / CAST(n_ab AS REAL)) as avg_pct
         FROM ctgov_all
-        WHERE LOWER({quote_col("antibody")}) = LOWER(?) AND {gcol} IS NOT NULL 
+        WHERE LOWER({quote_col("antibody")}) = LOWER(?) AND {ctgov_gcol} IS NOT NULL
               AND events_ab IS NOT NULL AND n_ab IS NOT NULL AND n_ab > 0{filter_sql}
-        GROUP BY {gcol}
+        GROUP BY {ctgov_gcol}
     '''
     ctgov_params = [req.antibody] + filter_params
     if severity_mode == "serious_or_grade3_plus":
@@ -447,14 +459,14 @@ def chart_cross_dataset(req: CrossDatasetRequest):
         ctgov_params = [req.antibody, "serious"] + filter_params
     ctgov_rows = conn.execute(ctgov_sql, ctgov_params).fetchall()
     ctgov_data = {r["category"]: round(r["avg_pct"], 2) if r["avg_pct"] else 0 for r in ctgov_rows}
-    
+
     pct_expr = label_percentage_expr(severity_mode)
     label_sql = f'''
-        SELECT {gcol} as category,
+        SELECT {label_gcol} as category,
                AVG({pct_expr}) as avg_pct
         FROM label_final
-        WHERE LOWER({quote_col("antibody")}) = LOWER(?) AND {gcol} IS NOT NULL AND {quote_col("all_grades%")} IS NOT NULL{filter_sql}
-        GROUP BY {gcol}
+        WHERE LOWER({quote_col("antibody")}) = LOWER(?) AND {label_gcol} IS NOT NULL AND {quote_col("all_grades%")} IS NOT NULL{filter_sql}
+        GROUP BY {label_gcol}
     '''
     label_rows = conn.execute(label_sql, [req.antibody] + filter_params).fetchall()
     label_data = {r["category"]: round(r["avg_pct"], 2) if r["avg_pct"] else 0 for r in label_rows}
@@ -482,9 +494,9 @@ def chart_target_aggregation(req: TargetAggregationRequest):
     validate_table(req.table)
     conn = get_conn()
     tt = table_type(req.table)
-    gcol = quote_col(req.group_by)
+    gcol = quote_col(map_group_col(req.group_by, tt))
     severity_mode = normalize_severity_mode(req.severity_mode)
-    
+
     # Build filter conditions
     filter_clauses = []
     filter_params = []
